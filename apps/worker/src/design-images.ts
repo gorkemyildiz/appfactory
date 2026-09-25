@@ -23,6 +23,8 @@ import {
   PlannerError,
 } from "@app-factory/ai";
 export class DesignImageManager {
+  onSaved?: (projectId: string) => Promise<void>;
+  cloudError: string | null = null;
   readonly jobs = new Map<string, DesignImageJob>();
   private locked = false;
   get busy() {
@@ -191,6 +193,17 @@ export class DesignImageManager {
       } catch {
         job.status = "failed";
         job.error = "Görsel iş kaydı yazılamadı.";
+      }
+      if (job.status === "succeeded" && this.onSaved) {
+        try {
+          await this.onSaved(job.projectId);
+          this.cloudError = null;
+        } catch (error) {
+          this.cloudError =
+            error instanceof Error
+              ? error.message
+              : "Görsel buluta kaydedilemedi; yerel dosya korundu.";
+        }
       }
       this.locked = false;
     }

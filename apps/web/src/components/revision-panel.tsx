@@ -8,6 +8,7 @@ import {
   type BuilderJob,
   type Project,
 } from "@app-factory/schemas";
+import { OperationProgress, builderProgress } from "./operation-progress";
 import { PreviewPanel } from "./preview-panel";
 import { Button } from "./ui/button";
 import {
@@ -254,6 +255,11 @@ export function RevisionPanel({
                   ? "Revizyon hazırlanıyor…"
                   : "Değişikliği AI ile uygula"}
               </Button>
+              {(pending || latest) && (
+                <OperationProgress
+                  {...builderProgress(pending ? null : (latest ?? null))}
+                />
+              )}
             </>
           )}
           {section !== "development" && connectionError && (

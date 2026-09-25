@@ -60,6 +60,30 @@ async function listFiles(directory: string, prefix = ""): Promise<string[]> {
   }
   return result.sort();
 }
+export async function assertDesignAssets(root: string, project: Project) {
+  for (const reference of project.designReview?.images ?? []) {
+    for (const extension of ["json", "png"]) {
+      try {
+        const file = path.join(
+          root,
+          "workspace/design-images",
+          reference.assetId + "." + extension,
+        );
+        if (!(await lstat(file)).isFile())
+          throw new Error("Geçersiz görsel dosyası.");
+      } catch (error) {
+        if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error;
+        const name =
+          getScreens(getSpecification(project)).find(
+            (screen) => screen.id === reference.screenId,
+          )?.name ?? reference.screenId;
+        throw new Error(
+          `“${name}” ekranının onaylı tasarım dosyası bu bilgisayarda yok. Supabase proje kaydı görsel dosyalarını içermez. Görseli üreten bilgisayarın workspace/design-images klasöründeki ${reference.assetId}.json ve .png dosyalarını buraya aktarın veya Tasarım sayfasında görselleri yeniden üretip onaylayın.`,
+        );
+      }
+    }
+  }
+}
 export async function generateProject(
   root: string,
   input: Project,
@@ -69,6 +93,7 @@ export async function generateProject(
   const project = projectSchema.parse(input);
   if (!["development", "tests", "build"].includes(project.stage))
     throw new Error("Önce plan, ekran ve tasarım onaylarını tamamlayın.");
+  await assertDesignAssets(root, project);
   const specification = getSpecification(project);
   const destination = await outputDirectory(root, project.id, jobId);
   const references: {

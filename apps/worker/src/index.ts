@@ -1,3 +1,4 @@
+import { DesignAssetCloud } from "./design-cloud";
 import { EasManager } from "./eas";
 import { PreviewManager } from "./preview";
 import type { Project } from "@app-factory/schemas";
@@ -51,6 +52,13 @@ const designImages: DesignImageManager = new DesignImageManager(
   root,
   (id) => plannerSpend(id) + builder.spent(id),
 );
+const designCloud = await DesignAssetCloud.fromEnvironment(root);
+async function syncDesignCloud(id: string, force = false) {
+  if (!designCloud) return;
+  await designCloud.sync(id, designImages.jobs, force);
+  designImages.cloudError = null;
+}
+designImages.onSaved = (id) => syncDesignCloud(id, true);
 const builder: BuilderManager = new BuilderManager(
   root,
   (id) => plannerSpend(id) + designImages.spent(id),
@@ -216,6 +224,7 @@ const server = createServer(async (request, response) => {
           "Başka bir AI görevi sürüyor. Tamamlanmasını bekleyin.",
         );
       const body = await readBody(request);
+      await syncDesignCloud(projectSchema.parse(body.project).id, true);
       send(202, {
         job: await builder.start(body.project, body.retry === true),
       });
@@ -234,8 +243,18 @@ const server = createServer(async (request, response) => {
         return;
       }
       const id = projectIdSchema.parse(url.searchParams.get("projectId"));
+      try {
+        await syncDesignCloud(id);
+      } catch (error) {
+        designImages.cloudError =
+          error instanceof Error
+            ? error.message
+            : "Bulut eşitlemesi başarısız.";
+      }
       send(200, {
         enabled: designImages.enabled,
+        cloudError: designImages.cloudError,
+        cloudEnabled: !!designCloud,
         jobs: designImages.list(id),
         totalCostUsd: committedCost(id),
       });
@@ -256,6 +275,7 @@ const server = createServer(async (request, response) => {
           !body.reviewedIds.every((id: unknown) => typeof id === "string")
         )
           throw new Error("Görsel onayları geçersiz.");
+        await syncDesignCloud(project.id, true);
         const approved = approveImageDesign(
           project,
           designImages.list(project.id),
@@ -270,6 +290,7 @@ const server = createServer(async (request, response) => {
       }
       if (builder.busy || planner.busy)
         throw new Error("AI analizi sürüyor. Tamamlanmasını bekleyin.");
+      await syncDesignCloud(projectSchema.parse(body.project).id, true);
       send(202, { job: await designImages.start(body) });
       return;
     }

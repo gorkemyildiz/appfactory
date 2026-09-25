@@ -1,5 +1,6 @@
 "use client";
 import Link from "next/link";
+import { OperationProgress, builderProgress } from "./operation-progress";
 import { RevisionPanel } from "./revision-panel";
 import { useEffect, useState } from "react";
 import {
@@ -188,6 +189,9 @@ export function BuilderPanel({
                       ? "Başarısız görevden devam et"
                       : "Uygulama işlevlerini ve ekranları üret"}
             </Button>
+            {(sending || job) && (
+              <OperationProgress {...builderProgress(sending ? null : job)} />
+            )}
             {job && (
               <p className="text-xs text-muted-foreground">
                 {job.tasks.filter((t) => t.status === "ready").length}/

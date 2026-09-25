@@ -23,7 +23,11 @@ import {
   type BuilderTask,
   type Project,
 } from "@app-factory/schemas";
-import { assertRealDirectory, generateProject } from "@app-factory/generator";
+import {
+  assertDesignAssets,
+  assertRealDirectory,
+  generateProject,
+} from "@app-factory/generator";
 import {
   runBuilder,
   runFeatureBuilder,
@@ -165,6 +169,7 @@ export class BuilderManager {
       project.budgetLimit
     )
       throw new Error("Builder için proje bütçesi yetersiz.");
+    await assertDesignAssets(this.root, project);
     const job: BuilderJob = existing ?? {
       mode,
       id: randomUUID(),

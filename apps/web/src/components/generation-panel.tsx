@@ -1,4 +1,5 @@
 "use client";
+import { OperationProgress } from "./operation-progress";
 import { RevisionPanel } from "./revision-panel";
 import { useEffect, useState } from "react";
 import Link from "next/link";
@@ -237,6 +238,12 @@ export function GenerationPanel({
                 >
                   Expo projesini üret
                 </Button>
+                {sending && (
+                  <OperationProgress
+                    value={0}
+                    label="Expo üretim isteği gönderiliyor…"
+                  />
+                )}
               </>
             )}
             {job && (
@@ -260,6 +267,18 @@ export function GenerationPanel({
                       {job.outputPath}
                     </code>
                   </div>
+                )}
+                {section === "development" && (
+                  <OperationProgress
+                    value={job.files.length ? 100 : 0}
+                    label={
+                      job.files.length
+                        ? "Expo başlangıç dosyaları üretildi."
+                        : job.status === "failed"
+                          ? "Expo üretimi başarısız."
+                          : "Expo dosyaları hazırlanıyor…"
+                    }
+                  />
                 )}
                 {busy && (
                   <p role="status" className="text-sm text-muted-foreground">

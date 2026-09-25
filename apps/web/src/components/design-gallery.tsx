@@ -16,20 +16,25 @@ import { Card } from "./ui/card";
 import { Label } from "./ui/label";
 import { Textarea } from "./ui/textarea";
 import { SpecificationEditor } from "./specification-editor";
+import { OperationProgress } from "./operation-progress";
 import { MobilePreview } from "./mobile-preview";
 export function DesignGallery({ project }: { project: Project }) {
   const { applyImageApproval, syncImageCost } = useProjects();
   const spec = getSpecification(project);
   const screens = getScreens(spec).filter((s) => s.enabled);
-  const approved =
+  const [recovering, setRecovering] = useState(false);
+  const hasApproval =
     project.designReview?.revision === spec.revision &&
     !!project.designReview.images?.length;
+  const approved = hasApproval && !recovering;
   const [jobs, setJobs] = useState<DesignImageJob[]>([]);
   const [enabled, setEnabled] = useState(false);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [connectionError, setConnectionError] = useState("");
+  const [cloudError, setCloudError] = useState("");
   const [sending, setSending] = useState(false);
+  const [operation, setOperation] = useState<string | null>(null);
   const [brief, setBrief] = useState(
     "Modern, özgün ve premium bir mobil deneyim. Güçlü tipografi, dengeli boşluklar ve fikre özel görsel bir kimlik. Sıradan yönetim paneli görünümünden uzaklaş.",
   );
@@ -53,6 +58,12 @@ export function DesignGallery({ project }: { project: Project }) {
           setJobs(data.jobs.map((j: unknown) => designImageJobSchema.parse(j)));
           setEnabled(data.enabled === true);
           setConnectionError("");
+          setCloudError(
+            data.cloudError ??
+              (data.cloudEnabled
+                ? ""
+                : "Görsel paylaşımı için worker Supabase bağlantısı gerekli."),
+          );
           syncImageCost(project.id, data.totalCostUsd);
         }
       } catch (e) {
@@ -84,6 +95,7 @@ export function DesignGallery({ project }: { project: Project }) {
     );
   });
   const generate = async (screenId: string) => {
+    setOperation(screenId);
     setSending(true);
     setError("");
     try {
@@ -113,9 +125,11 @@ export function DesignGallery({ project }: { project: Project }) {
       setError(e instanceof Error ? e.message : "Üretim başlatılamadı.");
     } finally {
       setSending(false);
+      setOperation(null);
     }
   };
   const approve = async () => {
+    setOperation("approve");
     setSending(true);
     setError("");
     try {
@@ -137,6 +151,7 @@ export function DesignGallery({ project }: { project: Project }) {
         ...(next.revisions ?? []),
       ].slice(-20);
       applyImageApproval(next, spec.revision);
+      setRecovering(false);
     } catch (e) {
       setError(e instanceof Error ? e.message : "Onay kaydedilemedi.");
     } finally {
@@ -179,11 +194,48 @@ export function DesignGallery({ project }: { project: Project }) {
           </p>
         )}
       </Card>
+      {cloudError && (
+        <p role="alert" className="text-sm text-destructive">
+          {cloudError}
+        </p>
+      )}
       {(error || connectionError) && (
         <p role="alert" className="text-sm text-destructive">
           {error || connectionError}
         </p>
       )}
+      {hasApproval &&
+        !loading &&
+        !connectionError &&
+        project.designReview?.images?.some(
+          (ref) =>
+            !jobs.some(
+              (job) => job.id === ref.assetId && job.status === "succeeded",
+            ),
+        ) && (
+          <Card className="gap-3 border-amber-300 p-5 shadow-none">
+            <h3 className="font-medium">
+              Onaylı görseller bu bilgisayarda bulunamadı
+            </h3>
+            <p className="text-sm">
+              Proje Supabase’de kayıtlı; görsel dosyaları üretildikleri
+              bilgisayarda kalır. İlgili JSON ve PNG dosyalarını
+              workspace/design-images klasörüne aktarıp worker’ı yeniden
+              başlatın. Alternatif olarak bu bilgisayarda yeni tasarım turu
+              başlatabilirsiniz.
+            </p>
+            <p className="text-xs text-muted-foreground">
+              Yeni görsel üretimi ücretlidir. Bu düğme yalnızca üretim
+              alanlarını açar; mevcut onay, yeni görselleri onaylayana kadar
+              korunur.
+            </p>
+            {!recovering && (
+              <Button variant="outline" onClick={() => setRecovering(true)}>
+                Bu bilgisayarda yeniden tasarım hazırla
+              </Button>
+            )}
+          </Card>
+        )}
       <div className="grid items-start gap-5 md:grid-cols-2 xl:grid-cols-3">
         {screens.map((screen) => {
           const history = current(screen.id);
@@ -301,6 +353,27 @@ export function DesignGallery({ project }: { project: Project }) {
                     {latest ? "Yeni taslak üret" : "Görsel taslak üret"} ·{" "}
                     {history.length}/3
                   </Button>
+                  {(operation === screen.id || latest) && (
+                    <OperationProgress
+                      value={
+                        operation === screen.id
+                          ? 0
+                          : latest?.status === "succeeded"
+                            ? 100
+                            : 50
+                      }
+                      label={
+                        operation === screen.id
+                          ? "Görsel üretim isteği gönderiliyor…"
+                          : latest?.status === "running"
+                            ? "AI tasarım görselini hazırlıyor…"
+                            : latest?.status === "succeeded"
+                              ? "Tasarım görseli hazır."
+                              : "Görsel üretimi başarısız; yeniden deneyebilirsiniz."
+                      }
+                      detail="İki adım: isteğin kabul edilmesi ve görselin tamamlanması. Model ara ilerleme yüzdesi bildirmez."
+                    />
+                  )}
                   {history.length > 1 && (
                     <details>
                       <summary className="cursor-pointer text-xs">
@@ -344,13 +417,16 @@ export function DesignGallery({ project }: { project: Project }) {
           </Button>
         ) : (
           <Button
-            disabled={!allReviewed || busy || !!connectionError}
+            disabled={!allReviewed || busy || !!connectionError || !!cloudError}
             onClick={() => void approve()}
           >
             Tasarımı onayla ve devam et
           </Button>
         )}
       </div>
+      {operation === "approve" && (
+        <OperationProgress value={0} label="Tasarım onayı kaydediliyor…" />
+      )}
       {approved && (
         <p className="text-xs text-muted-foreground">
           Yeni bir tasarım turu için Plan veya Ekranlar bölümündeki içeriği

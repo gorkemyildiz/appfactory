@@ -67,7 +67,7 @@ async function proxy(request: Request, body?: unknown) {
         },
         ...(body ? { body: JSON.stringify(body) } : {}),
         cache: "no-store",
-        signal: AbortSignal.timeout(8000),
+        signal: AbortSignal.timeout(120000),
       },
     );
     if (response.ok && assetId && !body)

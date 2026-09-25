@@ -304,3 +304,40 @@ test("custom screens generate routes while removed optional routes are excluded"
     await rm(root, { recursive: true, force: true });
   }
 });
+
+test("missing design metadata or PNG gives actionable recovery before generation", async () => {
+  const { assertDesignAssets } = await import("./index");
+  const { writeFile } = await import("node:fs/promises");
+  const root = await mkdtemp(path.join(tmpdir(), "factory-missing-design-"));
+  const assetId = randomUUID();
+  const input = {
+    ...project,
+    designReview: {
+      revision: 0,
+      screens: ["home"],
+      reviewedAt: new Date().toISOString(),
+      images: [{ screenId: "home", assetId, sourceRevision: 0 }],
+    },
+  };
+  try {
+    await assert.rejects(
+      assertDesignAssets(root, input),
+      /tasarım dosyası bu bilgisayarda yok/,
+    );
+    await mkdir(path.join(root, "workspace/design-images"), {
+      recursive: true,
+    });
+    await writeFile(
+      path.join(root, "workspace/design-images", assetId + ".json"),
+      "{}",
+    );
+    await assert.rejects(assertDesignAssets(root, input), /Tasarım sayfasında/);
+    await writeFile(
+      path.join(root, "workspace/design-images", assetId + ".png"),
+      "fixture",
+    );
+    await assert.doesNotReject(assertDesignAssets(root, input));
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
