@@ -1,0 +1,28 @@
+{
+  "name": "app-factory",
+  "version": "0.1.0",
+  "private": true,
+  "packageManager": "pnpm@10.28.2",
+  "engines": {
+    "node": ">=22.14.0"
+  },
+  "scripts": {
+    "dev": "pnpm --filter @app-factory/web dev",
+    "dev:worker": "pnpm --filter @app-factory/worker dev",
+    "build": "pnpm --filter @app-factory/web build && pnpm --filter @app-factory/worker build",
+    "lint": "eslint . --max-warnings 0",
+    "typecheck": "pnpm -r typecheck",
+    "test": "node --import tsx --test packages/shared/src/*.test.ts packages/schemas/src/*.test.ts packages/generator/src/*.test.ts apps/worker/src/*.test.ts packages/ai/src/*.test.ts",
+    "format": "prettier --write .",
+    "format:check": "prettier --check ."
+  },
+  "devDependencies": {
+    "@types/node": "^22.19.0",
+    "eslint": "^9.39.0",
+    "eslint-config-next": "^16.2.0",
+    "prettier": "3.8.1",
+    "tsx": "^4.21.0",
+    "typescript": "~5.9.3",
+    "typescript-eslint": "^8.56.0"
+  }
+}

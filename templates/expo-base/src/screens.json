@@ -1,0 +1,32 @@
+[
+  {
+    "id": "home",
+    "enabled": true,
+    "name": "Ana ekran",
+    "description": "Kayıtlarınızı buradan takip edin."
+  },
+  {
+    "id": "create",
+    "enabled": true,
+    "name": "Kayıt oluştur",
+    "description": "Yeni kaydınızın başlığını ve notlarını girin."
+  },
+  {
+    "id": "details",
+    "enabled": true,
+    "name": "Kayıt ayrıntıları",
+    "description": "Kaydınızı inceleyin ve düzenleyin."
+  },
+  {
+    "id": "settings",
+    "enabled": true,
+    "name": "Ayarlar",
+    "description": "Uygulama ve yerel veriler hakkında bilgiler."
+  },
+  {
+    "id": "register",
+    "enabled": false,
+    "name": "Kayıt ol",
+    "description": "Hesap oluşturma arayüzü prototipi."
+  }
+]
