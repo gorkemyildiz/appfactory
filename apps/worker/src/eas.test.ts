@@ -1,3 +1,4 @@
+import { tmpdir } from "node:os";
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { mkdir, mkdtemp, cp, readFile, writeFile, rm } from "node:fs/promises";
@@ -29,7 +30,7 @@ const success = (stdout = ""): EasCommandResult => ({
   stderr: "",
 });
 async function fixture() {
-  const root = await mkdtemp("/tmp/eas-test-");
+  const root = await mkdtemp(path.join(tmpdir(), "eas-test-"));
   await cp(
     path.resolve("templates/expo-base"),
     path.join(root, "templates/expo-base"),
@@ -59,7 +60,10 @@ async function fixture() {
 }
 async function finish(m: RealEasManager, id: string) {
   for (let i = 0; i < 200; i++) {
-    if (!["preparing", "submitting"].includes(m.jobs.get(id)?.status ?? ""))
+    if (
+      !m.busy &&
+      !["preparing", "submitting"].includes(m.jobs.get(id)?.status ?? "")
+    )
       return;
     await new Promise((r) => setTimeout(r, 10));
   }

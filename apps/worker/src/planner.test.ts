@@ -1,3 +1,5 @@
+import { tmpdir } from "node:os";
+import path from "node:path";
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { mkdtemp, rm, readFile } from "node:fs/promises";
@@ -49,7 +51,7 @@ async function finished(manager: PlannerManager) {
   throw new Error("Test zaman aşımı");
 }
 test("persistent Planner is idempotent and stale results cannot overwrite edits", async () => {
-  const root = await mkdtemp("/tmp/planner-test-");
+  const root = await mkdtemp(path.join(tmpdir(), "planner-test-"));
   try {
     let calls = 0;
     const manager = new PlannerManager(root, "test", async () => {
@@ -84,7 +86,7 @@ test("persistent Planner is idempotent and stale results cannot overwrite edits"
   }
 });
 test("budget, missing key and retry cap prevent paid requests", async () => {
-  const root = await mkdtemp("/tmp/planner-limits-");
+  const root = await mkdtemp(path.join(tmpdir(), "planner-limits-"));
   try {
     let calls = 0;
     const run = async () => {
@@ -112,7 +114,7 @@ test("budget, missing key and retry cap prevent paid requests", async () => {
   }
 });
 test("interrupted requests retain reserved budget after restart", async () => {
-  const root = await mkdtemp("/tmp/planner-restart-");
+  const root = await mkdtemp(path.join(tmpdir(), "planner-restart-"));
   try {
     const manager = new PlannerManager(
       root,

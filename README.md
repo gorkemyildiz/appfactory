@@ -36,6 +36,14 @@ Supabase veya AI anahtarı gerekmez. `WORKER_PORT` değiştirilirse hem web hem 
 
 ## Veri ve işler
 
+### Üç bilgisayardan ortak proje kullanımı
+
+Supabase ile ortak proje kaydı eklendi. Her bilgisayar aynı Supabase bağlantısını kullanır; ekip üyeleri kendi hesaplarıyla giriş yapar. Plan, ekran ve tasarım düzenlemeleri ortak çalışma alanına kaydedilir. Yerel projeler **Hesap ve bulut kaydı → Yerel projeleri ortak alana aktar** ile taşınır. Kurulum, üyelik SQL'i, çakışma yönetimi ve kapsam sınırları için [Supabase rehberi](supabase/README.md).
+
+Supabase tablo/üyelik kurulumu tamamlanmadan bulut kaydı çalışmaz. Worker işleri, üretilen Expo klasörleri, görsel dosyaları ve QR oturumları bu aşamada bilgisayara özeldir. Başka bilgisayarda ortak proje belgesinin görünmesi, o bilgisayarda kod çıktısı bulunduğu anlamına gelmez.
+
+### Yerel mod ve üretim dosyaları
+
 - Panel projeleri ve manuel onaylar bu tarayıcının `app-factory.projects.v1` localStorage kaydında saklanır. Tarayıcı verilerini temizlemek bunları kaldırır.
 - Worker iş kayıtları `workspace/jobs/<proje-id>.json` içinde atomik olarak yazılır. Restart sırasında yarım kalan işler başarısız işaretlenir; otomatik tekrar yapılmaz.
 - Çıktı `workspace/generated-projects/<proje-id>/<iş-id>/` altında ayrı dizine yazılır. Var olan dizinin üzerine yazılmaz; aynı üretim isteği mevcut işi döndürür.
@@ -137,3 +145,7 @@ Geliştirme, Testler ve Derleme sayfalarında **AI ile değişiklik iste** alan�
 Revizyon, kaynak dosyaları yeni iş klasörüne kopyalar; eski çıktıya dokunmaz. Yalnızca seçilen ekran dosyası AI tarafından değiştirilir. TypeScript/ESLint başarısızsa aday ekran geri alınır. Her görev için mevcut $0.24 sınırı, $0.08 rezervasyon ve en fazla üç deneme uygulanır; otomatik retry yoktur. İş kimliği yinelenen gönderimleri engeller. Kurulum dosyaları, bağımlılıklar ve ortak modüller AI tarafından düzenlenmez.
 
 Başarılı revizyonlar sürüm seçicisinde görünür; eski sürüme dönmek mümkündür. Yeni sürümün Expo önizlemesi ve kullanıcı onayı ayrı alınır. EAS build kendiliğinden başlamaz. API: GET/POST `/api/revisions`; iş kayıtları mevcut `workspace/builder` dizinindedir. Structured Outputs biçimi: https://developers.openai.com/api/docs/guides/structured-outputs
+
+### Ekran yönetimi
+
+Ekranlar sekmesinde en fazla 20 ekran tanımlanabilir. Ana ekran zorunludur; diğer ekranlar silinebilir. Kartlar başlangıçta kapalıdır; başlıktan veya Tümünü aç / Tümünü kapat düğmelerinden yönetilir. Yeni ekran otomatik açılır. Değişiklikler Ekranları kaydet ile ortak proje kaydına aktarılır ve ekran/tasarım onayları yenilenir. Mevcut üretilmiş çıktılar korunur. Özel ekranlar ayrı Expo rotası ve başlangıç içeriği alır; fikre özel davranışlar Builder aşamasında mevcut yetenekler kapsamında hazırlanır.

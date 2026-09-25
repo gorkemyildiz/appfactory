@@ -19,7 +19,12 @@ import {
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
-import { progress, stageLabels, stages } from "@app-factory/shared";
+import {
+  canAccessStage,
+  progress,
+  stageLabels,
+  stages,
+} from "@app-factory/shared";
 import { type Stage } from "@app-factory/schemas";
 type Section = "overview" | Exclude<Stage, "idea">;
 export function ProjectSection({ section }: { section: Section }) {
@@ -117,15 +122,7 @@ export function ProjectSection({ section }: { section: Section }) {
         </Card>
       </>
     );
-  const minimum: Record<Exclude<Section, "overview">, number> = {
-    plan: 1,
-    screens: 2,
-    design: 3,
-    development: 4,
-    tests: 4,
-    build: 4,
-  };
-  if (index < minimum[section])
+  if (!canAccessStage(project.stage, section))
     return (
       <>
         {header(
@@ -179,6 +176,7 @@ export function ProjectSection({ section }: { section: Section }) {
   if (project.designReview?.images?.length)
     return (
       <BuilderPanel
+        section={section}
         key={project.id + ":" + project.specification?.revision}
         project={project}
       />

@@ -114,13 +114,13 @@ export function MobilePreview({
                 )}
               >
                 <span className="flex items-center justify-between text-sm font-medium">
-                  {screens[id].name}
+                  {screens[id]?.name}
                   {reviewed.includes(id) && (
                     <Check size={16} aria-label="İncelendi" />
                   )}
                 </span>
                 <span className="mt-1 block text-xs leading-5 text-muted-foreground">
-                  {screens[id].description}
+                  {screens[id]?.description}
                 </span>
               </button>
             ))}
@@ -153,7 +153,7 @@ export function MobilePreview({
             </div>
             <div
               role="region"
-              aria-label={`${screens[screen].name} telefon önizlemesi`}
+              aria-label={`${screens[screen]?.name} telefon önizlemesi`}
               style={{ background: theme.background, color: theme.text }}
             >
               <div className="flex min-h-14 items-center gap-3 border-b border-neutral-300 px-4 text-base font-semibold">
@@ -166,7 +166,7 @@ export function MobilePreview({
                     <ArrowLeft size={20} />
                   </button>
                 )}
-                {screens[screen].name}
+                {screens[screen]?.name}
               </div>
               <div
                 className="h-[500px] overflow-y-auto break-words text-base leading-6"
@@ -179,7 +179,7 @@ export function MobilePreview({
                     gap: theme.spacing,
                   }}
                 >
-                  <p>{screens[screen].description}</p>
+                  <p>{screens[screen]?.description}</p>
                   {screen === "home" ? (
                     <>
                       <h4
@@ -196,7 +196,7 @@ export function MobilePreview({
                         Başlangıç şablonu · Fikre özel özellikler henüz
                         üretilmedi.
                       </p>
-                      {screens.create.enabled && (
+                      {screens.create?.enabled && (
                         <button
                           type="button"
                           style={button}
@@ -208,7 +208,7 @@ export function MobilePreview({
                       {example ? (
                         <button
                           type="button"
-                          disabled={!screens.details.enabled}
+                          disabled={!screens.details?.enabled}
                           onClick={() => navigate("details")}
                           className="text-left"
                           style={{
@@ -226,12 +226,12 @@ export function MobilePreview({
                       ) : (
                         <p>
                           Henüz kayıt yok.
-                          {screens.create.enabled
+                          {screens.create?.enabled
                             ? " İlk kaydınızı ekleyin."
                             : ""}
                         </p>
                       )}
-                      {screens.settings.enabled && (
+                      {screens.settings?.enabled && (
                         <button
                           type="button"
                           style={button}
@@ -240,7 +240,7 @@ export function MobilePreview({
                           {screens.settings.name}
                         </button>
                       )}
-                      {screens.register.enabled && (
+                      {screens.register?.enabled && (
                         <button
                           type="button"
                           style={button}
@@ -292,6 +292,11 @@ export function MobilePreview({
                       </p>
                       <p>App Factory başlangıç şablonu · Sürüm 1.0.0</p>
                     </>
+                  ) : screen.startsWith("custom-") ? (
+                    <p>
+                      Özel ekran başlangıcı. Davranışlar Builder aşamasında
+                      hazırlanır.
+                    </p>
                   ) : (
                     <>
                       <label htmlFor="preview-title">Başlık</label>

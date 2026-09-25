@@ -1,4 +1,6 @@
 import { spawn, type ChildProcess } from "node:child_process";
+import { existsSync } from "node:fs";
+import path from "node:path";
 const activeChildren = new Set<ChildProcess>();
 function terminate(child: ChildProcess) {
   try {
@@ -35,7 +37,38 @@ export function runCommand(
       CI: "1",
       EXPO_NO_TELEMETRY: "1",
       FORCE_COLOR: "0",
+      ...(process.platform === "win32"
+        ? {
+            SystemRoot: process.env.SystemRoot,
+            TEMP: process.env.TEMP,
+            TMP: process.env.TMP,
+            USERPROFILE: process.env.USERPROFILE,
+            LOCALAPPDATA: process.env.LOCALAPPDATA,
+            APPDATA: process.env.APPDATA,
+          }
+        : {}),
     };
+    // Windows command shims cannot be spawned with shell:false. Run npm's
+    // JavaScript entry point directly so arguments never pass through a shell.
+    if (process.platform === "win32" && /^(npm|npm\.cmd)$/.test(command)) {
+      const candidates = [
+        path.dirname(process.execPath),
+        ...(process.env.PATH ?? "").split(path.delimiter),
+      ].map((directory) =>
+        path.join(directory, "node_modules/npm/bin/npm-cli.js"),
+      );
+      const cli = candidates.find((file) => existsSync(file));
+      if (!cli) {
+        resolve({
+          output: "npm CLI bulunamadı.",
+          exitCode: null,
+          durationMs: Date.now() - start,
+        });
+        return;
+      }
+      command = process.execPath;
+      args = [cli, ...args];
+    }
     const child = spawn(command, args, {
       cwd,
       env,

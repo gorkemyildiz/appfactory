@@ -21,9 +21,11 @@ import { useProjects } from "./project-provider";
 export function RevisionPanel({
   project,
   sourceJobId,
+  section,
 }: {
   project: Project;
   sourceJobId: string | null;
+  section: "development" | "tests" | "build";
 }) {
   const [jobs, setJobs] = useState<BuilderJob[]>([]),
     [enabled, setEnabled] = useState(false),
@@ -138,100 +140,128 @@ export function RevisionPanel({
   }
   return (
     <div className="space-y-5">
-      <PreviewPanel
-        key={selectedId ?? "none"}
-        project={project}
-        sourceJobId={active ? null : selectedId}
-      />
+      {section === "build" && (
+        <PreviewPanel
+          key={selectedId ?? "none"}
+          project={project}
+          sourceJobId={active ? null : selectedId}
+        />
+      )}
       <Card className="shadow-none">
         <CardHeader>
-          <CardTitle>AI ile değişiklik iste</CardTitle>
+          <CardTitle>
+            {section === "development"
+              ? "AI ile değişiklik iste"
+              : section === "tests"
+                ? "Revizyon kontrol sonuçları"
+                : "Önizlenecek sürüm"}
+          </CardTitle>
           <CardDescription>
-            Telefonda gördüğünüz bir ekranı tarif ederek düzenletin. Çalışan
-            sürüm korunur; yeni çıktı ayrı hazırlanır ve yeniden önizleme onayı
-            ister.
+            {section === "development"
+              ? "Bir ekranı tarif ederek düzenletin. Çalışan sürüm korunur; yeni çıktı ayrı hazırlanır."
+              : section === "tests"
+                ? "Revizyonların gerçek kod kontrol günlüklerini inceleyin."
+                : "Çalışan bir sürüm seçin; QR önizleme ve APK işlemleri bu sürüme bağlanır."}
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
-          <label className="block space-y-1 text-sm">
-            <span>Önizlenecek ve değiştirilecek sürüm</span>
-            <select
-              className="block w-full rounded-md border bg-background p-2"
-              value={selectedId ?? ""}
-              disabled={active || pending}
-              onChange={(e) => {
-                setSelected(e.target.value);
-                requestId.current = null;
-              }}
-            >
-              <option value={sourceJobId ?? ""}>İlk çalışan çıktı</option>
-              {ready.map((j, i) => (
-                <option key={j.id} value={j.id}>
-                  Revizyon {i + 1} · {j.tasks[0]?.name}
-                </option>
-              ))}
-            </select>
-          </label>
-          <label className="block space-y-1 text-sm">
-            <span>Hangi ekran?</span>
-            <select
-              className="block w-full rounded-md border bg-background p-2"
-              value={screenId || screens[0]?.id || ""}
-              disabled={pending || active}
-              onChange={(e) => {
-                setScreenId(e.target.value);
-                requestId.current = null;
-              }}
-            >
-              {screens.map((s) => (
-                <option key={s.id} value={s.id}>
-                  {s.name}
-                </option>
-              ))}
-            </select>
-          </label>
-          <label className="block space-y-1 text-sm">
-            <span>Ne değişsin?</span>
-            <textarea
-              className="block min-h-24 w-full rounded-md border bg-background p-3"
-              maxLength={2000}
-              value={instruction}
-              disabled={pending || active}
-              onChange={(e) => {
-                setInstruction(e.target.value);
-                requestId.current = null;
-              }}
-              placeholder="Örneğin: Ana ekrandaki kartları daha kompakt yap, başlığı küçült ve ekleme düğmesini belirginleştir."
-            />
-          </label>
-          <p className="text-xs text-muted-foreground">
-            Bir görev bir ekranı değiştirir. Yeni backend, paket veya ortak veri
-            modeli eklemez. Deneme başına $0.08 bütçe ayrılır; görev sınırı
-            $0.24, en fazla iki manuel yeniden deneme.
-          </p>
-          {(error || connectionError) && (
+          {section !== "tests" && (
+            <label className="block space-y-1 text-sm">
+              <span>Çalışan sürüm</span>
+              <select
+                className="block w-full rounded-md border bg-background p-2"
+                value={selectedId ?? ""}
+                disabled={active || pending}
+                onChange={(e) => {
+                  setSelected(e.target.value);
+                  requestId.current = null;
+                }}
+              >
+                <option value={sourceJobId ?? ""}>İlk çalışan çıktı</option>
+                {ready.map((j, i) => (
+                  <option key={j.id} value={j.id}>
+                    Revizyon {i + 1} · {j.tasks[0]?.name}
+                  </option>
+                ))}
+              </select>
+            </label>
+          )}
+          {section === "tests" && !latest && (
+            <p className="text-sm text-muted-foreground">
+              Henüz bu çıktıya bağlı revizyon kontrolü yok.
+            </p>
+          )}
+          {section === "development" && (
+            <>
+              <label className="block space-y-1 text-sm">
+                <span>Hangi ekran?</span>
+                <select
+                  className="block w-full rounded-md border bg-background p-2"
+                  value={screenId || screens[0]?.id || ""}
+                  disabled={pending || active}
+                  onChange={(e) => {
+                    setScreenId(e.target.value);
+                    requestId.current = null;
+                  }}
+                >
+                  {screens.map((s) => (
+                    <option key={s.id} value={s.id}>
+                      {s.name}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <label className="block space-y-1 text-sm">
+                <span>Ne değişsin?</span>
+                <textarea
+                  className="block min-h-24 w-full rounded-md border bg-background p-3"
+                  maxLength={2000}
+                  value={instruction}
+                  disabled={pending || active}
+                  onChange={(e) => {
+                    setInstruction(e.target.value);
+                    requestId.current = null;
+                  }}
+                  placeholder="Örneğin: Ana ekrandaki kartları daha kompakt yap, başlığı küçült ve ekleme düğmesini belirginleştir."
+                />
+              </label>
+              <p className="text-xs text-muted-foreground">
+                Bir görev bir ekranı değiştirir. Yeni backend, paket veya ortak
+                veri modeli eklemez. Deneme başına $0.08 bütçe ayrılır; görev
+                sınırı $0.24, en fazla iki manuel yeniden deneme.
+              </p>
+              {(error || connectionError) && (
+                <p role="alert" className="text-sm text-destructive">
+                  {error || connectionError}
+                </p>
+              )}
+              {!enabled && (
+                <p className="text-sm">
+                  Revizyon için worker AI bağlantısı gerekli.
+                </p>
+              )}
+              <Button
+                disabled={
+                  !enabled ||
+                  !selectedId ||
+                  pending ||
+                  active ||
+                  instruction.trim().length < 5
+                }
+                onClick={() => void submit()}
+              >
+                {active
+                  ? "Revizyon hazırlanıyor…"
+                  : "Değişikliği AI ile uygula"}
+              </Button>
+            </>
+          )}
+          {section !== "development" && connectionError && (
             <p role="alert" className="text-sm text-destructive">
-              {error || connectionError}
+              {connectionError}
             </p>
           )}
-          {!enabled && (
-            <p className="text-sm">
-              Revizyon için worker AI bağlantısı gerekli.
-            </p>
-          )}
-          <Button
-            disabled={
-              !enabled ||
-              !selectedId ||
-              pending ||
-              active ||
-              instruction.trim().length < 5
-            }
-            onClick={() => void submit()}
-          >
-            {active ? "Revizyon hazırlanıyor…" : "Değişikliği AI ile uygula"}
-          </Button>
-          {latest && (
+          {section !== "build" && latest && (
             <div className="space-y-2 border-t pt-4 text-sm">
               <p className="font-medium">
                 Son revizyon:{" "}
@@ -258,7 +288,7 @@ export function RevisionPanel({
                   .toFixed(6)}{" "}
                 · Deneme {latest.tasks[0]?.attempts}/3
               </p>
-              {latest.status === "failed" && (
+              {section === "development" && latest.status === "failed" && (
                 <Button
                   variant="outline"
                   disabled={
@@ -272,13 +302,17 @@ export function RevisionPanel({
                   Revizyonu yeniden dene
                 </Button>
               )}
-              <details>
-                <summary className="cursor-pointer">Kontrol günlükleri</summary>
-                <pre className="max-h-64 overflow-auto whitespace-pre-wrap text-xs">
-                  {latest.setupLog}
-                  {latest.tasks.map((t) => t.log).join("\n")}
-                </pre>
-              </details>
+              {section === "tests" && (
+                <details>
+                  <summary className="cursor-pointer">
+                    Kontrol günlükleri
+                  </summary>
+                  <pre className="max-h-64 overflow-auto whitespace-pre-wrap text-xs">
+                    {latest.setupLog}
+                    {latest.tasks.map((t) => t.log).join("\n")}
+                  </pre>
+                </details>
+              )}
             </div>
           )}
         </CardContent>

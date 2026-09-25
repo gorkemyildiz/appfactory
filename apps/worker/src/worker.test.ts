@@ -7,6 +7,19 @@ import { randomUUID } from "node:crypto";
 import { runCommand } from "./runner";
 import { JobManager } from "./jobs";
 import type { GenerationJob } from "@app-factory/schemas";
+test(
+  "runner launches the installed npm CLI without a shell on Windows",
+  {
+    skip: process.platform !== "win32",
+  },
+  async () => {
+    for (const command of ["npm", "npm.cmd"]) {
+      const result = await runCommand(command, ["--version"], process.cwd());
+      assert.equal(result.exitCode, 0, result.output);
+      assert.match(result.output, /\d+\.\d+\.\d+/);
+    }
+  },
+);
 test("runner records real failure and terminates timed-out processes", async () => {
   const failure = await runCommand(
     process.execPath,

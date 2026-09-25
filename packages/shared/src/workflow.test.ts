@@ -20,3 +20,17 @@ test("does not imply builds completed and caps retries", () => {
   assert.equal(progress("idea"), 0);
   assert.ok(progress("build") < 100);
 });
+
+test("navigation permits only completed and current stages, including after rollback", async () => {
+  const { canAccessStage, stages } = await import("./index");
+  for (const [currentIndex, current] of stages.entries()) {
+    assert.equal(canAccessStage(current, "overview"), true);
+    for (const [targetIndex, target] of stages.entries())
+      assert.equal(
+        canAccessStage(current, target),
+        targetIndex <= currentIndex,
+      );
+  }
+  assert.equal(canAccessStage("design", "build"), false);
+  assert.equal(canAccessStage("tests", "build"), false);
+});

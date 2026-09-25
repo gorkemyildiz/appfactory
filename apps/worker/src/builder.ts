@@ -1,3 +1,4 @@
+import { screenFile } from "@app-factory/schemas";
 import {
   mkdir,
   readdir,
@@ -31,7 +32,6 @@ import {
 import { runCommand } from "./runner";
 import type { EasSource } from "./eas";
 import {
-  screenFiles,
   validateScreenCode,
   cleanScreenImports,
   validateRecordContract,
@@ -376,7 +376,7 @@ export class BuilderManager {
           job.project.budgetLimit
         )
           throw new Error("Proje bütçesi sonraki ekran için yetersiz.");
-        const file = screenFiles[task.screenId];
+        const file = screenFile(task.screenId);
         const target = await this.checkedFile(cwd, file);
         const modules: Record<string, string> = {};
         for (const name of [

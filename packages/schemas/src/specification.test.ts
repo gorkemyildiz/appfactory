@@ -137,3 +137,37 @@ test("screen selection requires home and visual approval of exactly selected scr
   );
   assert.equal(reviseProject(edited, "screens", screens, 1), edited);
 });
+
+test("custom screens allow optional deletion but retain mandatory home and safe unique routes", async () => {
+  const { screensSchema, screenFile } = await import("./index");
+  const home = {
+    id: "home",
+    enabled: true,
+    name: "Ana ekran",
+    description: "",
+  };
+  const custom = { ...home, id: "custom-notes", name: "Notlar" };
+  assert.equal(screensSchema.safeParse([home, custom]).success, true);
+  assert.equal(screensSchema.safeParse([custom]).success, false);
+  assert.equal(screensSchema.safeParse([home, custom, custom]).success, false);
+  assert.equal(
+    screensSchema.safeParse([home, { ...custom, id: "custom-../secrets" }])
+      .success,
+    false,
+  );
+  assert.equal(
+    screensSchema.safeParse([
+      home,
+      ...Array.from({ length: 20 }, (_, i) => ({
+        ...custom,
+        id: "custom-" + i,
+      })),
+    ]).success,
+    false,
+  );
+  assert.equal(screenFile(custom.id), "app/custom-notes.tsx");
+  assert.throws(() => screenFile("../secrets"));
+  const edited = reviseProject(project, "screens", [home, custom], 0);
+  assert.equal(edited.stage, "screens");
+  assert.equal(edited.designReview, undefined);
+});

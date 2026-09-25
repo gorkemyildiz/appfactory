@@ -4,8 +4,12 @@ import {
   createContext,
   useContext,
   useSyncExternalStore,
+  useEffect,
   type ReactNode,
 } from "react";
+import { ProjectSync, type PendingProject } from "@app-factory/database";
+import { supabase, projectRepository } from "@/lib/cloud-projects";
+import { projectSchema } from "@app-factory/schemas";
 import {
   projectInputSchema,
   applyPlannerResult,
@@ -17,6 +21,7 @@ import {
   sameSpecification,
   type SpecificationSection,
   storedProjectsSchema,
+  generationJobSchema,
   type Project,
   type ProjectInput,
   type GenerationJob,
@@ -29,6 +34,12 @@ import {
 const KEY = "app-factory.projects.v1";
 type Snapshot = { projects: Project[]; ready: boolean; error: string | null };
 type Store = Snapshot & {
+  cloud: CloudState;
+  importLocalProjects: () => void;
+  retryCloud: () => void;
+  downloadPending: () => void;
+  loadCloudVersion: () => Promise<void>;
+  restoreLocalProject: (id: string) => Promise<void>;
   applyImageApproval: (project: Project, expectedRevision: number) => void;
   syncImageCost: (id: string, cost: number) => void;
   applyPlanner: (job: PlannerJob) => void;
@@ -54,6 +65,178 @@ const empty: Snapshot = { projects: [], ready: false, error: null };
 let snapshot = empty;
 const listeners = new Set<() => void>();
 const emit = () => listeners.forEach((listener) => listener());
+type CloudState = {
+  configured: boolean;
+  userId: string | null;
+  email: string | null;
+  status: "local" | "loading" | "signed-out" | "synced" | "saving" | "error";
+  error: string | null;
+};
+let cloud: CloudState = {
+  configured: !!supabase,
+  userId: null,
+  email: null,
+  status: supabase ? "loading" : "local",
+  error: null,
+};
+let sync: ProjectSync<Project> | null = null;
+let cloudLoaded = false;
+let downloadedPending = "";
+const outboxKeys = new Map<string, string>();
+function outboxKey(id: string) {
+  const existing = outboxKeys.get(id);
+  if (existing) return existing;
+  // Each page owns its outbox, including duplicated tabs. Reloads recover the
+  // previous page's pending records without sharing a writable key with it.
+  const pointer = `${KEY}.outbox-pointer.${id}`;
+  const prior = sessionStorage.getItem(pointer);
+  const prefix = `${KEY}.outbox.${id}.`;
+  const pending = prior?.startsWith(prefix)
+    ? localStorage.getItem(prior)
+    : null;
+  const key = prefix + crypto.randomUUID();
+  localStorage.setItem(key, pending ?? "[]");
+  sessionStorage.setItem(pointer, key);
+  outboxKeys.set(id, key);
+  return key;
+}
+function setCloud(update: Partial<CloudState>) {
+  cloud = { ...cloud, ...update };
+  snapshot = { ...snapshot };
+  emit();
+}
+function currentProjects() {
+  if (cloud.userId) return snapshot.projects;
+  const raw = localStorage.getItem(KEY);
+  return raw
+    ? storedProjectsSchema.parse(JSON.parse(raw)).projects
+    : snapshot.projects;
+}
+function persistProjects(projects: Project[]) {
+  if (
+    supabase &&
+    (cloud.status === "loading" || (cloud.userId && !cloudLoaded))
+  )
+    throw new Error("Bulut projelerinin yüklenmesini bekleyin.");
+  if (cloud.userId && sync) {
+    sync.enqueue(projects);
+  } else {
+    localStorage.setItem(KEY, JSON.stringify({ version: 1, projects }));
+    snapshot = { projects, ready: true, error: null };
+    emit();
+  }
+}
+async function activateCloud(user: { id: string; email?: string } | null) {
+  if (user?.id === cloud.userId && cloud.status !== "loading") return;
+  sync?.stop();
+  sync = null;
+  cloudLoaded = false;
+  downloadedPending = "";
+  if (!user) {
+    cloud = {
+      ...cloud,
+      userId: null,
+      email: null,
+      status: "signed-out",
+      error: null,
+    };
+    snapshot = empty;
+    initialize();
+    emit();
+    return;
+  }
+  const ownerId = user.id;
+  snapshot = { projects: [], ready: true, error: null };
+  setCloud({
+    userId: ownerId,
+    email: user.email ?? null,
+    status: "loading",
+    error: null,
+  });
+  try {
+    const raw = JSON.parse(
+      localStorage.getItem(outboxKey(ownerId)) ?? "[]",
+    ) as PendingProject<Project>[];
+    if (!Array.isArray(raw)) throw new Error("Invalid outbox");
+    const pending = raw.map((item) => {
+      if (
+        !Number.isSafeInteger(item.expectedVersion) ||
+        item.expectedVersion < 0
+      )
+        throw new Error("Invalid version");
+      return {
+        document: projectSchema.parse(item.document),
+        expectedVersion: item.expectedVersion,
+      };
+    });
+    sync = new ProjectSync(
+      projectRepository(ownerId),
+      pending,
+      (items) =>
+        localStorage.setItem(outboxKey(ownerId), JSON.stringify(items)),
+      (projects, status, error) => {
+        if (cloud.userId !== ownerId) return;
+        if (status !== "error") cloudLoaded = true;
+        snapshot = { projects, ready: true, error: null };
+        setCloud({ status, error: error ?? null });
+      },
+    );
+    await sync.refresh();
+  } catch {
+    setCloud({
+      status: "error",
+      error:
+        "Hesaba ait bekleyen kayıtlar okunamadı. Yerel depolama verisini silmeden kontrol edin.",
+    });
+  }
+}
+function importLocalProjects() {
+  if (!cloud.userId || !cloudLoaded || !sync)
+    throw new Error("Önce bulut hesabınıza giriş yapın.");
+  const raw = localStorage.getItem(KEY);
+  const local = raw ? storedProjectsSchema.parse(JSON.parse(raw)).projects : [];
+  // Existing cloud IDs always win; importing never overwrites another device.
+  persistProjects([
+    ...snapshot.projects,
+    ...local.filter(
+      (p) => !snapshot.projects.some((remote) => remote.id === p.id),
+    ),
+  ]);
+}
+function retryCloud() {
+  if (sync) void sync.refresh();
+}
+function downloadPending() {
+  if (!cloud.userId) return;
+  const raw = localStorage.getItem(outboxKey(cloud.userId)) ?? "[]";
+  const url = URL.createObjectURL(
+    new Blob([raw], { type: "application/json" }),
+  );
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = "app-factory-bekleyen-degisiklikler.json";
+  link.click();
+  URL.revokeObjectURL(url);
+  downloadedPending = raw;
+}
+async function loadCloudVersion() {
+  if (!cloud.userId || !supabase) return;
+  const key = outboxKey(cloud.userId);
+  const pending = localStorage.getItem(key) ?? "[]";
+  if (pending !== "[]" && downloadedPending !== pending)
+    throw new Error(
+      "Önce bekleyen değişiklikleri indirin. Bulut sürümü bu tarayıcıdaki bekleyen değişikliklerin yerini alacak.",
+    );
+  const { data } = await supabase.auth.getSession();
+  if (data.session?.user.id !== cloud.userId)
+    throw new Error("Oturum değişti.");
+  // Keep an account-scoped recovery copy even after explicit discard.
+  localStorage.setItem(`${key}.backup`, pending);
+  localStorage.setItem(key, "[]");
+  sync?.stop();
+  cloud = { ...cloud, status: "loading" };
+  await activateCloud(data.session.user);
+}
 // Translate only unchanged seeded text; preserve user-authored project content.
 function localizeDemoProjects(projects: Project[]): Project[] {
   const legacy: Record<string, { name: string; idea: string }> = {
@@ -100,6 +283,7 @@ function initialize() {
   }
 }
 function synchronize(event: StorageEvent) {
+  if (cloud.userId) return;
   if (event.key !== KEY) return;
   try {
     snapshot = {
@@ -126,15 +310,7 @@ function subscribe(listener: () => void) {
   };
 }
 function save(projects: Project[]) {
-  let error: string | null = null;
-  try {
-    localStorage.setItem(KEY, JSON.stringify({ version: 1, projects }));
-  } catch {
-    error =
-      "Tarayıcı depolama alanına erişilemiyor veya alan dolu. Değişiklikler yalnızca bu sekmede tutulur ve yenilemede kaybolur.";
-  }
-  snapshot = { projects, ready: true, error };
-  emit();
+  persistProjects(projects);
 }
 function create(input: ProjectInput) {
   const validated = projectInputSchema.parse(input);
@@ -150,6 +326,33 @@ function create(input: ProjectInput) {
     ...snapshot.projects,
   ]);
   return id;
+}
+async function restoreLocalProject(id: string) {
+  const response = await fetch(
+    `/api/jobs?projectId=${encodeURIComponent(id)}`,
+    {
+      cache: "no-store",
+    },
+  );
+  const data = await response.json();
+  if (!response.ok) throw new Error(data.error ?? "Yerel proje alınamadı.");
+  if (!data.job) throw new Error("Bu proje için yerel iş kaydı bulunamadı.");
+  const job = generationJobSchema.parse(data.job);
+  if (job.projectId !== id || job.project.id !== id)
+    throw new Error("Yerel proje kaydı eşleşmiyor.");
+  const projects = currentProjects();
+  // Never replace a project already present in this browser.
+  if (projects.some((project) => project.id === id)) {
+    snapshot = { projects, ready: true, error: null };
+    emit();
+    return;
+  }
+  const restored: Project = {
+    ...job.project,
+    stage: job.status === "ready" ? "tests" : job.project.stage,
+  };
+  const next = [restored, ...projects];
+  persistProjects(next);
 }
 function advance(id: string, event: WorkflowEvent) {
   if (event === "APPROVE_DESIGN")
@@ -171,18 +374,13 @@ function approveDesign(
   screens: readonly string[],
   revision: number,
 ) {
-  const raw = localStorage.getItem(KEY);
-  const projects = raw
-    ? storedProjectsSchema.parse(JSON.parse(raw)).projects
-    : snapshot.projects;
+  const projects = currentProjects();
   const next = projects.map((project) =>
     project.id === id
       ? approveVisualDesign(project, screens, revision)
       : project,
   );
-  localStorage.setItem(KEY, JSON.stringify({ version: 1, projects: next }));
-  snapshot = { projects: next, ready: true, error: null };
-  emit();
+  persistProjects(next);
 }
 function editSpecification(
   id: string,
@@ -190,28 +388,20 @@ function editSpecification(
   input: unknown,
   expectedRevision: number,
 ) {
-  const raw = localStorage.getItem(KEY);
-  const projects = raw
-    ? localizeDemoProjects(storedProjectsSchema.parse(JSON.parse(raw)).projects)
-    : snapshot.projects;
+  const projects = currentProjects();
   const next = projects.map((project) =>
     project.id === id
       ? reviseProject(project, section, input, expectedRevision)
       : project,
   );
   // Persist first: a failed write must not be reported as a saved revision.
-  localStorage.setItem(KEY, JSON.stringify({ version: 1, projects: next }));
-  snapshot = { projects: next, ready: true, error: null };
-  emit();
+  persistProjects(next);
   const saved = next.find((project) => project.id === id);
   if (!saved) throw new Error("Proje bulunamadı.");
   return getSpecification(saved);
 }
 function syncPreview(project: Project) {
-  const raw = localStorage.getItem(KEY);
-  const projects = raw
-    ? storedProjectsSchema.parse(JSON.parse(raw)).projects
-    : snapshot.projects;
+  const projects = currentProjects();
   save(
     projects.map((p) =>
       p.id === project.id && sameSpecification(p, project)
@@ -222,25 +412,20 @@ function syncPreview(project: Project) {
 }
 function syncBuilder(job: BuilderJob) {
   if (job.status !== "ready") return;
-  const raw = localStorage.getItem(KEY);
-  const projects = raw
-    ? storedProjectsSchema.parse(JSON.parse(raw)).projects
-    : snapshot.projects;
+  const projects = currentProjects();
   const current = projects.find((p) => p.id === job.project.id);
   if (
     !current ||
-    ["tests", "build"].includes(current.stage) ||
+    current.stage === "build" ||
     !sameSpecification(current, job.project)
   )
     return;
   const next = projects.map((p) =>
     p.id === current.id
-      ? { ...p, stage: "tests" as const, updatedAt: new Date().toISOString() }
+      ? { ...p, stage: "build" as const, updatedAt: new Date().toISOString() }
       : p,
   );
-  localStorage.setItem(KEY, JSON.stringify({ version: 1, projects: next }));
-  snapshot = { projects: next, ready: true, error: null };
-  emit();
+  persistProjects(next);
 }
 function syncGeneration(job: GenerationJob) {
   const current = snapshot.projects.find(
@@ -253,13 +438,7 @@ function syncGeneration(job: GenerationJob) {
   )
     return;
   const stage =
-    job.status === "ready"
-      ? current.stage === "build"
-        ? "build"
-        : "tests"
-      : job.files.length
-        ? "tests"
-        : null;
+    job.status === "ready" ? "build" : job.files.length ? "tests" : null;
   if (!stage) return;
   if (
     !snapshot.projects.some(
@@ -282,34 +461,21 @@ function syncPlannerCost(job: PlannerJob) {
     !snapshot.projects.some((p) => p.id === job.projectId && p.aiCost < total)
   )
     return;
-  const raw = localStorage.getItem(KEY);
-  const projects = raw
-    ? storedProjectsSchema.parse(JSON.parse(raw)).projects
-    : snapshot.projects;
+  const projects = currentProjects();
   const next = projects.map((p) =>
     p.id === job.projectId ? { ...p, aiCost: Math.max(p.aiCost, total) } : p,
   );
-  localStorage.setItem(KEY, JSON.stringify({ version: 1, projects: next }));
-  snapshot = { projects: next, ready: true, error: null };
-  emit();
+  persistProjects(next);
 }
 function applyPlanner(job: PlannerJob) {
-  const raw = localStorage.getItem(KEY);
-  const projects = raw
-    ? storedProjectsSchema.parse(JSON.parse(raw)).projects
-    : snapshot.projects;
+  const projects = currentProjects();
   const next = projects.map((p) =>
     p.id === job.projectId ? applyPlannerResult(p, job) : p,
   );
-  localStorage.setItem(KEY, JSON.stringify({ version: 1, projects: next }));
-  snapshot = { projects: next, ready: true, error: null };
-  emit();
+  persistProjects(next);
 }
 function applyImageApproval(approved: Project, expectedRevision: number) {
-  const raw = localStorage.getItem(KEY);
-  const projects = raw
-    ? storedProjectsSchema.parse(JSON.parse(raw)).projects
-    : snapshot.projects;
+  const projects = currentProjects();
   const current = projects.find((p) => p.id === approved.id);
   if (!current || getSpecification(current).revision !== expectedRevision)
     throw new Error("Proje değişti. Güncel tasarımı yeniden inceleyin.");
@@ -318,9 +484,7 @@ function applyImageApproval(approved: Project, expectedRevision: number) {
       ? { ...approved, aiCost: Math.max(p.aiCost, approved.aiCost) }
       : p,
   );
-  localStorage.setItem(KEY, JSON.stringify({ version: 1, projects: next }));
-  snapshot = { projects: next, ready: true, error: null };
-  emit();
+  persistProjects(next);
 }
 function syncImageCost(id: string, cost: number) {
   if (
@@ -329,19 +493,36 @@ function syncImageCost(id: string, cost: number) {
     !snapshot.projects.some((p) => p.id === id && p.aiCost < cost)
   )
     return;
-  const raw = localStorage.getItem(KEY);
-  const projects = raw
-    ? storedProjectsSchema.parse(JSON.parse(raw)).projects
-    : snapshot.projects;
+  const projects = currentProjects();
   const next = projects.map((p) =>
     p.id === id ? { ...p, aiCost: Math.max(p.aiCost, cost) } : p,
   );
-  localStorage.setItem(KEY, JSON.stringify({ version: 1, projects: next }));
-  snapshot = { projects: next, ready: true, error: null };
-  emit();
+  persistProjects(next);
 }
 const Context = createContext<Store | null>(null);
 export function ProjectProvider({ children }: { children: ReactNode }) {
+  useEffect(() => {
+    if (!supabase) return;
+    let disposed = false;
+    const { data } = supabase.auth.onAuthStateChange((_event, session) => {
+      // Supabase auth callbacks must not await other auth operations.
+      setTimeout(() => {
+        if (!disposed) void activateCloud(session?.user ?? null);
+      }, 0);
+    });
+    const refresh = () => {
+      if (cloud.status === "synced") void sync?.refresh();
+    };
+    const timer = setInterval(refresh, 15000);
+    window.addEventListener("focus", refresh);
+    return () => {
+      disposed = true;
+      data.subscription.unsubscribe();
+      clearInterval(timer);
+      window.removeEventListener("focus", refresh);
+      sync?.stop();
+    };
+  }, []);
   const state = useSyncExternalStore(
     subscribe,
     () => snapshot,
@@ -351,6 +532,12 @@ export function ProjectProvider({ children }: { children: ReactNode }) {
     <Context.Provider
       value={{
         ...state,
+        cloud,
+        importLocalProjects,
+        retryCloud,
+        downloadPending,
+        loadCloudVersion,
+        restoreLocalProject,
         create,
         advance,
         syncGeneration,

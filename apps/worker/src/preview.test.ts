@@ -1,3 +1,4 @@
+import { tmpdir } from "node:os";
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import {
@@ -30,7 +31,9 @@ const project: Project = {
   updatedAt: new Date().toISOString(),
 };
 async function fixture() {
-  const root = await realpath(await mkdtemp("/tmp/preview-test-"));
+  const root = await realpath(
+    await mkdtemp(path.join(tmpdir(), "preview-test-")),
+  );
   const id = randomUUID(),
     outputPath = `workspace/generated-projects/${project.id}/${id}`,
     cwd = path.join(root, outputPath);
@@ -115,8 +118,9 @@ test("fingerprint rejects linked source files and preview env excludes unrelated
   const f = await fixture();
   try {
     await symlink(
-      path.join(f.cwd, "app.json"),
-      path.join(f.cwd, "linked.json"),
+      f.root,
+      path.join(f.cwd, "linked-directory"),
+      process.platform === "win32" ? "junction" : "dir",
     );
     await assert.rejects(sourceFingerprint(f.cwd), /sembolik/);
     const env = previewEnvironment("192.168.1.2");

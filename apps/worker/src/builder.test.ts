@@ -1,3 +1,4 @@
+import { tmpdir } from "node:os";
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { mkdtemp, rm, mkdir, cp, writeFile, readFile } from "node:fs/promises";
@@ -30,7 +31,7 @@ const base: Project = {
   updatedAt: new Date().toISOString(),
 };
 async function fixture() {
-  const root = await mkdtemp("/tmp/builder-test-");
+  const root = await mkdtemp(path.join(tmpdir(), "builder-test-"));
   await mkdir(path.join(root, "templates"));
   await cp(
     path.resolve("templates/expo-base"),

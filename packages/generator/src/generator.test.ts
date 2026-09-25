@@ -67,9 +67,9 @@ test("produces isolated Expo output with safely serialized user content and pres
   }
 });
 test("rejects paths and unapproved projects", async () => {
-  await assert.rejects(outputDirectory("/tmp", "../escape", randomUUID()));
+  await assert.rejects(outputDirectory(tmpdir(), "../escape", randomUUID()));
   await assert.rejects(
-    generateProject("/tmp", { ...project, stage: "plan" }, randomUUID()),
+    generateProject(tmpdir(), { ...project, stage: "plan" }, randomUUID()),
     /onay/,
   );
 });
@@ -81,6 +81,7 @@ test("rejects symlink output roots", async () => {
     await symlink(
       path.join(root, "outside"),
       path.join(root, "workspace/generated-projects"),
+      process.platform === "win32" ? "junction" : "dir",
     );
     await assert.rejects(
       outputDirectory(root, project.id, randomUUID()),
@@ -254,7 +255,51 @@ test("EAS APK configuration uses stable per-project IDs and excludes factory met
       "design-references/",
       "credentials.json",
     ])
-      assert.ok(ignore.split("\n").includes(pattern));
+      assert.ok(ignore.split(/\r?\n/).includes(pattern));
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+test("custom screens generate routes while removed optional routes are excluded", async () => {
+  const root = await mkdtemp(path.join(tmpdir(), "factory-custom-"));
+  try {
+    await cp(path.resolve("templates"), path.join(root, "templates"), {
+      recursive: true,
+    });
+    const specification = {
+      ...getSpecification(project),
+      screens: [
+        { id: "home", enabled: true, name: "Ana ekran", description: "" },
+        {
+          id: "custom-notes",
+          enabled: true,
+          name: "Notlar",
+          description: "Özel açıklama",
+        },
+        { id: "custom-hidden", enabled: false, name: "Gizli", description: "" },
+      ],
+    };
+    const result = await generateProject(
+      root,
+      { ...project, specification },
+      randomUUID(),
+    );
+    assert.ok(result.files.includes("app/custom-notes.tsx"));
+    for (const file of [
+      "app/create.tsx",
+      "app/settings.tsx",
+      "app/register.tsx",
+      "app/items/[id].tsx",
+      "app/custom-hidden.tsx",
+    ])
+      assert.ok(!result.files.includes(file));
+    const source = await readFile(
+      path.join(root, result.outputPath, "app/custom-notes.tsx"),
+      "utf8",
+    );
+    assert.match(source, /custom-notes/);
+    assert.match(source, /definition.description/);
   } finally {
     await rm(root, { recursive: true, force: true });
   }

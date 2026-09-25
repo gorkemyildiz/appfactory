@@ -6,9 +6,11 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { useProjects } from "@/components/project-provider";
 import { cn } from "@/lib/utils";
+import { CloudAccount } from "./cloud-account";
+import { AccountMenu } from "./account-menu";
 export function Shell({ children }: { children: React.ReactNode }) {
   const path = usePathname();
-  const { error } = useProjects();
+  const { error, cloud } = useProjects();
   return (
     <div className="min-h-screen">
       <header className="border-b bg-white">
@@ -25,12 +27,7 @@ export function Shell({ children }: { children: React.ReactNode }) {
               V1
             </Badge>
           </Link>
-          <div className="flex items-center gap-3 text-xs text-muted-foreground">
-            <span className="hidden sm:inline">Kişisel çalışma alanı</span>
-            <span className="flex size-8 items-center justify-center rounded-full border bg-muted text-foreground">
-              AF
-            </span>
-          </div>
+          <AccountMenu />
         </div>
       </header>
       <div className="mx-auto max-w-7xl px-5 md:px-8">
@@ -64,9 +61,19 @@ export function Shell({ children }: { children: React.ReactNode }) {
           </Link>
           <span className="ml-auto flex items-center gap-2 text-xs text-muted-foreground">
             <span className="size-1.5 rounded-full bg-amber-500" />
-            Yerel mod
+            {
+              {
+                local: "Yerel mod",
+                loading: "Bulut yükleniyor…",
+                "signed-out": "Yerel · Giriş yapılmadı",
+                synced: "Supabase · Kaydedildi",
+                saving: "Buluta kaydediliyor…",
+                error: "Bulut eşitleme hatası",
+              }[cloud.status]
+            }
           </span>
         </nav>
+        <CloudAccount />
         {error && (
           <p
             role="alert"

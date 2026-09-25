@@ -123,7 +123,7 @@ export function cleanScreenImports(code: string, file: string) {
 // This catches a dropped storage connection, not complete behavioral equivalence.
 // Device tests and visual review are still required after compiler/linter success.
 export function validateRecordContract(code: string, file: string) {
-  if (file === screenFiles.register) return;
+  if (!screenRequirements(file).requiredRecordFields.length) return;
   const source = ts.createSourceFile(
     file,
     code,

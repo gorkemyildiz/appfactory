@@ -1,6 +1,6 @@
 import { router } from "expo-router";
 import { Pressable, Text, View } from "react-native";
-import { screen } from "../src/screens";
+import { screen, screens } from "../src/screens";
 import project from "../src/project.json";
 import { useRecords } from "../src/records";
 import { Action, Page, styles } from "../src/ui";
@@ -63,6 +63,15 @@ export default function Home() {
           onPress={() => router.push("/register")}
         />
       )}
+      {screens
+        .filter((s) => s.enabled && s.id.startsWith("custom-"))
+        .map((s) => (
+          <Action
+            key={s.id}
+            title={s.name}
+            onPress={() => router.push(`/${s.id}`)}
+          />
+        ))}
     </Page>
   );
 }

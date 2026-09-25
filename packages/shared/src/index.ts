@@ -17,6 +17,11 @@ export const stageLabels: Record<Stage, string> = {
   tests: "Testler",
   build: "Derleme",
 };
+export function canAccessStage(current: Stage, target: Stage | "overview") {
+  return (
+    target === "overview" || stages.indexOf(target) <= stages.indexOf(current)
+  );
+}
 export const MAX_RETRIES = 2;
 export const taskPolicy = {
   maxRetries: MAX_RETRIES,

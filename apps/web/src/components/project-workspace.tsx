@@ -1,5 +1,7 @@
 "use client";
 import Link from "next/link";
+import { useState } from "react";
+import { Button } from "@/components/ui/button";
 import { useParams, usePathname } from "next/navigation";
 import {
   ArrowLeft,
@@ -15,7 +17,8 @@ import {
 import { useProjects } from "@/components/project-provider";
 import { Loading, BackToDashboard } from "@/components/shell";
 import { Badge } from "@/components/ui/badge";
-import { stageLabels } from "@app-factory/shared";
+import { type Stage } from "@app-factory/schemas";
+import { canAccessStage, stageLabels } from "@app-factory/shared";
 import { cn } from "@/lib/utils";
 const links = [
   { name: "Genel Bakış", slug: "", icon: LayoutDashboard },
@@ -29,7 +32,9 @@ const links = [
 export function ProjectWorkspace({ children }: { children: React.ReactNode }) {
   const { id } = useParams<{ id: string }>();
   const path = usePathname();
-  const { projects, ready } = useProjects();
+  const { projects, ready, restoreLocalProject } = useProjects();
+  const [restoring, setRestoring] = useState(false);
+  const [restoreError, setRestoreError] = useState("");
   if (!ready) return <Loading />;
   const project = projects.find((p) => p.id === id);
   if (!project)
@@ -37,9 +42,36 @@ export function ProjectWorkspace({ children }: { children: React.ReactNode }) {
       <div className="py-16 text-center">
         <h1 className="mb-2 text-xl font-semibold">Proje bulunamadı</h1>
         <p className="mb-5 text-sm text-muted-foreground">
-          Bu proje bu tarayıcıda kayıtlı değil.
+          Bu proje bu tarayıcıda kayıtlı değil. Bilgisayardaki mevcut iş
+          kaydından projeyi ekleyebilirsiniz.
         </p>
-        <BackToDashboard />
+        <Button
+          className="mb-5"
+          disabled={restoring}
+          onClick={async () => {
+            setRestoring(true);
+            setRestoreError("");
+            try {
+              await restoreLocalProject(id);
+            } catch (error) {
+              setRestoreError(
+                error instanceof Error ? error.message : "Proje eklenemedi.",
+              );
+            } finally {
+              setRestoring(false);
+            }
+          }}
+        >
+          {restoring ? "Proje ekleniyor…" : "Yerel projeyi bu tarayıcıya ekle"}
+        </Button>
+        {restoreError && (
+          <p role="alert" className="mb-5 text-sm text-destructive">
+            {restoreError}
+          </p>
+        )}
+        <div>
+          <BackToDashboard />
+        </div>
       </div>
     );
   return (
@@ -78,6 +110,24 @@ export function ProjectWorkspace({ children }: { children: React.ReactNode }) {
           >
             {links.map(({ name, slug, icon: Icon }) => {
               const href = `/projects/${id}${slug}`;
+              const accessible = canAccessStage(
+                project.stage,
+                (slug.slice(1) || "overview") as Stage | "overview",
+              );
+              if (!accessible)
+                return (
+                  <button
+                    key={name}
+                    type="button"
+                    disabled
+                    aria-disabled="true"
+                    title="Önce mevcut adımı tamamlayın"
+                    className="flex shrink-0 cursor-not-allowed items-center gap-2.5 rounded-md px-3 py-2.5 text-sm text-muted-foreground opacity-40"
+                  >
+                    <Icon size={16} />
+                    {name}
+                  </button>
+                );
               return (
                 <Link
                   key={name}

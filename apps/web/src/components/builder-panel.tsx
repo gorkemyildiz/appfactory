@@ -1,4 +1,5 @@
 "use client";
+import Link from "next/link";
 import { RevisionPanel } from "./revision-panel";
 import { useEffect, useState } from "react";
 import {
@@ -24,7 +25,13 @@ const labels = {
   ready: "Kontroller geçti",
   failed: "Durduruldu",
 };
-export function BuilderPanel({ project }: { project: Project }) {
+export function BuilderPanel({
+  project,
+  section,
+}: {
+  project: Project;
+  section: "development" | "tests" | "build";
+}) {
   const [job, setJob] = useState<BuilderJob | null>(null);
   const [history, setHistory] = useState<BuilderJob[]>([]);
   const [enabled, setEnabled] = useState(false);
@@ -101,118 +108,156 @@ export function BuilderPanel({ project }: { project: Project }) {
   const busy = job?.status === "running";
   return (
     <div className="space-y-5">
+      <h2 className="text-lg font-semibold">
+        {
+          {
+            development: "Geliştirme",
+            tests: "Testler",
+            build: "Derleme ve Önizleme",
+          }[section]
+        }
+      </h2>
       <RevisionPanel
+        section={section}
         project={project}
         sourceJobId={job?.status === "ready" && !stale ? job.id : null}
       />
-      <Card className="shadow-none">
-        <CardHeader>
-          <CardTitle>Görselden Expo uygulamasına</CardTitle>
-          <CardDescription>
-            Onayladığınız her ekran ayrı bir AI göreviyle kodlanır. TypeScript
-            ve ESLint her ekranın ardından çalışır.
-          </CardDescription>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          <p className="text-sm text-muted-foreground">
-            Ekran başına en fazla $0.24; her denemede $0.08 bütçe ayrılır.
-            Hatalı görevlerde otomatik tekrar yapılmaz; en fazla iki kez yeniden
-            deneyebilirsiniz.
-          </p>
-          <p className="text-sm text-muted-foreground">
-            Bu sürüm ekran tasarımı ve mevcut yerel kayıt işlemlerini kapsar.
-            Gerçek hesap, sunucu bağlantısı ve plandaki diğer entegrasyonlar
-            henüz tamamlanmış sayılmaz.
-          </p>
-          {error && (
-            <p role="alert" className="text-sm text-destructive">
-              {error}
-            </p>
-          )}
-          {job?.error && (
-            <p role="alert" className="text-sm text-destructive">
-              {job.error}
-            </p>
-          )}
-          {stale && (
-            <p className="text-sm text-destructive">
-              Bu çıktı eski içeriğe ait. Güncel tasarımı onaylayın.
-            </p>
-          )}
-          {!enabled && loaded && (
-            <p className="text-sm">
-              Worker .env dosyasında OPENAI_API_KEY gerekli.
-            </p>
-          )}
-          <Button
-            disabled={
-              !loaded ||
-              !enabled ||
-              sending ||
-              busy ||
-              job?.status === "ready" ||
-              !!exhausted ||
-              !!stale
-            }
-            onClick={() => void start()}
-          >
-            {sending
-              ? "Başlatılıyor…"
-              : busy
-                ? "Ekranlar hazırlanıyor…"
-                : job?.status === "ready"
-                  ? "Expo kod kontrolleri tamamlandı"
-                  : job?.status === "failed"
-                    ? "Başarısız görevden devam et"
-                    : "Onaylı tasarımları kodla"}
-          </Button>
-          {job && (
-            <p className="text-xs text-muted-foreground">
-              {job.tasks.filter((t) => t.status === "ready").length}/
-              {job.tasks.length} ekran · Builder maliyeti: $
-              {job.tasks.reduce((n, t) => n + t.costUsd, 0).toFixed(6)} ·
-              Ayrılan / belirsiz: $
-              {job.tasks
-                .reduce((n, t) => n + t.reservedUsd + t.uncertainCostUsd, 0)
-                .toFixed(6)}
-            </p>
-          )}
-        </CardContent>
-      </Card>
-      {job?.tasks.map((task) => (
-        <Card key={task.screenId} className="shadow-none">
+      {section === "development" && (
+        <Card className="shadow-none">
           <CardHeader>
-            <div className="flex items-center justify-between gap-3">
-              <CardTitle className="text-base">{task.name}</CardTitle>
-              <Badge variant="secondary">{labels[task.status]}</Badge>
-            </div>
+            <CardTitle>Görselden Expo uygulamasına</CardTitle>
             <CardDescription>
-              Deneme {task.attempts}/3 · ${task.costUsd.toFixed(6)}
+              Onayladığınız her ekran ayrı bir AI göreviyle kodlanır. TypeScript
+              ve ESLint her ekranın ardından çalışır.
             </CardDescription>
           </CardHeader>
-          <CardContent className="space-y-3">
-            {task.summary && <p className="text-sm">{task.summary}</p>}
-            {task.limitations.length > 0 && (
-              <ul className="list-disc space-y-1 pl-5 text-sm text-muted-foreground">
-                {task.limitations.map((item, i) => (
-                  <li key={i}>{item}</li>
-                ))}
-              </ul>
+          <CardContent className="space-y-4">
+            <p className="text-sm text-muted-foreground">
+              Ekran başına en fazla $0.24; her denemede $0.08 bütçe ayrılır.
+              Hatalı görevlerde otomatik tekrar yapılmaz; en fazla iki kez
+              yeniden deneyebilirsiniz.
+            </p>
+            <p className="text-sm text-muted-foreground">
+              Bu sürüm ekran tasarımı ve mevcut yerel kayıt işlemlerini kapsar.
+              Gerçek hesap, sunucu bağlantısı ve plandaki diğer entegrasyonlar
+              henüz tamamlanmış sayılmaz.
+            </p>
+            {error && (
+              <p role="alert" className="text-sm text-destructive">
+                {error}
+              </p>
             )}
-            {task.log && (
-              <details>
-                <summary className="cursor-pointer text-sm">
-                  Kontrol çıktısı
-                </summary>
-                <pre className="mt-2 max-h-72 overflow-auto whitespace-pre-wrap rounded border p-3 text-xs">
-                  {task.log}
-                </pre>
-              </details>
+            {job?.error && (
+              <p role="alert" className="text-sm text-destructive">
+                {job.error}
+              </p>
+            )}
+            {stale && (
+              <p className="text-sm text-destructive">
+                Bu çıktı eski içeriğe ait. Güncel tasarımı onaylayın.
+              </p>
+            )}
+            {!enabled && loaded && (
+              <p className="text-sm">
+                Worker .env dosyasında OPENAI_API_KEY gerekli.
+              </p>
+            )}
+            <Button
+              disabled={
+                !loaded ||
+                !enabled ||
+                sending ||
+                busy ||
+                job?.status === "ready" ||
+                !!exhausted ||
+                !!stale
+              }
+              onClick={() => void start()}
+            >
+              {sending
+                ? "Başlatılıyor…"
+                : busy
+                  ? "Ekranlar hazırlanıyor…"
+                  : job?.status === "ready"
+                    ? "Expo kod kontrolleri tamamlandı"
+                    : job?.status === "failed"
+                      ? "Başarısız görevden devam et"
+                      : "Onaylı tasarımları kodla"}
+            </Button>
+            {job && (
+              <p className="text-xs text-muted-foreground">
+                {job.tasks.filter((t) => t.status === "ready").length}/
+                {job.tasks.length} ekran · Builder maliyeti: $
+                {job.tasks.reduce((n, t) => n + t.costUsd, 0).toFixed(6)} ·
+                Ayrılan / belirsiz: $
+                {job.tasks
+                  .reduce((n, t) => n + t.reservedUsd + t.uncertainCostUsd, 0)
+                  .toFixed(6)}
+              </p>
             )}
           </CardContent>
         </Card>
-      ))}
-      {job?.setupLog && (
+      )}
+      {section === "tests" && (
+        <Card className="p-5 shadow-none">
+          <h3 className="font-medium">Kod kontrol sonuçları</h3>
+          <p className="text-sm text-muted-foreground">
+            TypeScript ve ESLint üretim sırasında gerçek kod üzerinde çalışır.
+            Cihaz testi yerine geçmez. Başarısız kod görevlerini Geliştirme
+            sekmesinden manuel yeniden deneyebilirsiniz.
+          </p>
+          {error && <p role="alert">{error}</p>}
+          {!job && (
+            <p>
+              {loaded
+                ? "Bu sürüm için henüz Builder kontrol sonucu yok."
+                : "Kontroller yükleniyor…"}
+            </p>
+          )}
+          <Button asChild variant="outline">
+            <Link href={`/projects/${project.id}/development`}>
+              Geliştirmeye git
+            </Link>
+          </Button>
+        </Card>
+      )}
+      {section !== "build" &&
+        job?.tasks.map((task) => (
+          <Card key={task.screenId} className="shadow-none">
+            <CardHeader>
+              <div className="flex items-center justify-between gap-3">
+                <CardTitle className="text-base">{task.name}</CardTitle>
+                <Badge variant="secondary">{labels[task.status]}</Badge>
+              </div>
+              <CardDescription>
+                Deneme {task.attempts}/3 · ${task.costUsd.toFixed(6)}
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-3">
+              {section === "development" && task.summary && (
+                <p className="text-sm">{task.summary}</p>
+              )}
+              {section === "development" && task.limitations.length > 0 && (
+                <ul className="list-disc space-y-1 pl-5 text-sm text-muted-foreground">
+                  {task.limitations.map((item, i) => (
+                    <li key={i}>{item}</li>
+                  ))}
+                </ul>
+              )}
+              {section === "tests" && task.log && (
+                <details>
+                  <summary className="cursor-pointer text-sm">
+                    Kontrol çıktısı
+                  </summary>
+                  <pre className="mt-2 max-h-72 overflow-auto whitespace-pre-wrap rounded border p-3 text-xs">
+                    {task.log}
+                  </pre>
+                </details>
+              )}
+            </CardContent>
+          </Card>
+        ))}
+      {section === "tests" && job?.setupLog && (
         <details>
           <summary className="cursor-pointer text-sm">Expo kurulumu</summary>
           <pre className="mt-2 max-h-60 overflow-auto whitespace-pre-wrap text-xs">
@@ -220,22 +265,18 @@ export function BuilderPanel({ project }: { project: Project }) {
           </pre>
         </details>
       )}
-      {job?.status === "ready" && !stale && (
-        <Card className="shadow-none">
-          <CardHeader>
-            <CardTitle>Önizlemeye hazır</CardTitle>
-            <CardDescription>
-              Kod kontrolleri geçti. Görsel uyumu ve cihaz davranışını
-              önizlemede inceleyin; ardından EAS bölümünden APK
-              oluşturabilirsiniz.
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            <pre className="overflow-auto rounded border p-4 text-sm">{`cd "${job.outputPath}"\nnpm start\n# Tarayıcı önizlemesi için: npm run web`}</pre>
-          </CardContent>
-        </Card>
+      {section !== "build" && job?.status === "ready" && !stale && (
+        <Button asChild variant="outline">
+          <Link
+            href={`/projects/${project.id}/${section === "development" ? "tests" : "build"}`}
+          >
+            {section === "development"
+              ? "Kontrol sonuçlarına git"
+              : "QR önizleme ve derlemeye git"}
+          </Link>
+        </Button>
       )}
-      {history.length > 0 && (
+      {section === "development" && history.length > 0 && (
         <details>
           <summary className="cursor-pointer text-sm">
             Önceki sürümlerin çıktıları

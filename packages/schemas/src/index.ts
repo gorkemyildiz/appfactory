@@ -81,18 +81,34 @@ export const screenIds = [
   "settings",
   "register",
 ] as const;
+export const screenIdSchema = z.union([
+  z.enum(screenIds),
+  z.string().regex(/^custom-[a-z0-9-]{1,50}$/, "Geçersiz ekran kimliği."),
+]);
+export function screenFile(id: string): string {
+  screenIdSchema.parse(id);
+  const builtins: Record<string, string> = {
+    home: "app/index.tsx",
+    create: "app/create.tsx",
+    details: "app/items/[id].tsx",
+    settings: "app/settings.tsx",
+    register: "app/register.tsx",
+  };
+  return builtins[id] ?? `app/${id}.tsx`;
+}
 export const screensSchema = z
   .array(
     z.object({
-      id: z.enum(screenIds),
+      id: screenIdSchema,
       enabled: z.boolean(),
       name: z.string().trim().min(1, "Ekran adı boş olamaz.").max(60),
       description: z.string().trim().max(500),
     }),
   )
-  .length(5)
+  .min(1)
+  .max(20, "En fazla 20 ekran ekleyebilirsiniz.")
   .refine(
-    (s) => new Set(s.map((x) => x.id)).size === 5,
+    (s) => new Set(s.map((x) => x.id)).size === s.length,
     "Her ekran bir kez tanımlanmalıdır.",
   )
   .refine(
@@ -158,18 +174,18 @@ export const designReviewSchema = z.object({
   images: z
     .array(
       z.object({
-        screenId: z.enum(screenIds),
+        screenId: screenIdSchema,
         assetId: z.uuid(),
         sourceRevision: z.number().int().nonnegative(),
       }),
     )
-    .max(5)
+    .max(20)
     .optional(),
   revision: z.number().int().nonnegative(),
   screens: z
-    .array(z.enum(screenIds))
+    .array(screenIdSchema)
     .min(1)
-    .max(5)
+    .max(20)
     .refine((s) => new Set(s).size === s.length, "Ekranlar tekrarlanamaz."),
   reviewedAt: z.iso.datetime(),
 });
@@ -181,12 +197,12 @@ export const plannerOutputSchema = z.object({
   screenNotes: z
     .array(
       z.object({
-        screenId: z.enum(screenIds),
+        screenId: screenIdSchema,
         fields: z.array(z.string().trim().min(1).max(150)).max(12),
         actions: z.array(z.string().trim().min(1).max(200)).max(8),
       }),
     )
-    .max(5),
+    .max(20),
   tasks: z
     .array(
       z.object({
@@ -454,7 +470,7 @@ export const designImageJobSchema = z.object({
   id: z.uuid(),
   projectId: projectIdSchema,
   revision: z.number().int().nonnegative(),
-  screenId: z.enum(screenIds),
+  screenId: screenIdSchema,
   screenName: z.string(),
   brief: z.string().max(1000),
   status: z.enum(["running", "succeeded", "failed"]),
@@ -468,7 +484,7 @@ export const designImageJobSchema = z.object({
 export type DesignImageJob = z.infer<typeof designImageJobSchema>;
 export const designImageRequestSchema = z.object({
   project: projectSchema.safeExtend({ id: projectIdSchema }),
-  screenId: z.enum(screenIds),
+  screenId: screenIdSchema,
   brief: z.string().trim().max(1000),
   requestId: z.uuid(),
   expectedLatestId: z.uuid().nullable(),
@@ -528,7 +544,7 @@ export function builderJsonSchema() {
   return schema;
 }
 export const builderTaskSchema = z.object({
-  screenId: z.enum(screenIds),
+  screenId: screenIdSchema,
   name: z.string(),
   status: z.enum(["pending", "running", "ready", "failed"]),
   attempts: z.number().int().min(0).max(3),
@@ -541,7 +557,7 @@ export const builderTaskSchema = z.object({
 });
 export const codeChangeSchema = z.object({
   sourceJobId: z.uuid(),
-  screenId: z.enum(screenIds),
+  screenId: screenIdSchema,
   instruction: z.string().trim().min(5).max(2000),
 });
 export const revisionRequestSchema = z.object({
@@ -558,7 +574,7 @@ export const builderJobSchema = z.object({
   outputPath: z.string(),
   setupAttempts: z.number().int().min(0).max(3),
   installed: z.boolean(),
-  tasks: z.array(builderTaskSchema).min(1).max(5),
+  tasks: z.array(builderTaskSchema).min(1).max(20),
   error: z.string().nullable(),
   setupLog: z.string(),
   createdAt: z.iso.datetime(),

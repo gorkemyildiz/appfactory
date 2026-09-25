@@ -1,3 +1,5 @@
+import { tmpdir } from "node:os";
+import path from "node:path";
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { mkdtemp, rm, readFile } from "node:fs/promises";
@@ -39,7 +41,7 @@ async function finish(m: DesignImageManager) {
   throw new Error("Timeout");
 }
 test("image requests are idempotent; history, costs, latest approval and retry cap are enforced", async () => {
-  const root = await mkdtemp("/tmp/design-test-");
+  const root = await mkdtemp(path.join(tmpdir(), "design-test-"));
   try {
     let calls = 0;
     const m = new DesignImageManager(
@@ -115,7 +117,7 @@ test("image requests are idempotent; history, costs, latest approval and retry c
   }
 });
 test("insufficient project budget prevents requests; interrupted generation keeps its reservation", async () => {
-  const root = await mkdtemp("/tmp/design-budget-");
+  const root = await mkdtemp(path.join(tmpdir(), "design-budget-"));
   try {
     const m = new DesignImageManager(
       root,

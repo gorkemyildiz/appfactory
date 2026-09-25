@@ -1,5 +1,5 @@
 import definitions from "./screens.json";
-export type ScreenId = "home" | "create" | "details" | "settings" | "register";
+export type ScreenId = string;
 export const screenRoutes: Record<ScreenId, string> = {
   home: "index",
   create: "create",
@@ -15,6 +15,10 @@ export const screens = definitions as {
 }[];
 export function screen(id: ScreenId) {
   const value = screens.find((s) => s.id === id);
-  if (!value) throw new Error("Ekran tanımı bulunamadı.");
-  return value;
+  return value ?? { id, enabled: false, name: "", description: "" };
+}
+
+for (const definition of screens) {
+  if (definition.id.startsWith("custom-"))
+    screenRoutes[definition.id] = definition.id;
 }

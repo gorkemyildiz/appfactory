@@ -11,6 +11,7 @@ import {
 import path from "node:path";
 import {
   projectSchema,
+  screenFile,
   designImageJobSchema,
   getSpecification,
   getScreens,
@@ -129,9 +130,12 @@ export async function generateProject(
     register: "app/register.tsx",
   };
   const excluded = new Set(
-    getScreens(specification)
-      .filter((s) => !s.enabled)
-      .map((s) => routeFiles[s.id]),
+    Object.entries(routeFiles)
+      .filter(
+        ([id]) =>
+          !getScreens(specification).some((s) => s.id === id && s.enabled),
+      )
+      .map(([, file]) => file),
   );
   await cp(templateDirectory, destination, {
     recursive: true,
@@ -139,8 +143,26 @@ export async function generateProject(
     force: false,
     filter: (source) =>
       !["node_modules", ".expo"].includes(path.basename(source)) &&
-      !excluded.has(path.relative(templateDirectory, source)),
+      !excluded.has(
+        path.relative(templateDirectory, source).split(path.sep).join("/"),
+      ),
   });
+  for (const screen of getScreens(specification).filter(
+    (s) => s.enabled && s.id.startsWith("custom-"),
+  )) {
+    await writeFile(
+      path.join(destination, screenFile(screen.id)),
+      `import { Text } from "react-native";
+import { screen } from "../src/screens";
+import { Page, styles } from "../src/ui";
+export default function CustomScreen() {
+ const definition = screen(${JSON.stringify(screen.id)});
+ return <Page><Text style={styles.title}>{definition.name}</Text><Text style={styles.text}>{definition.description}</Text></Page>;
+}
+`,
+      { flag: "wx" },
+    );
+  }
   await writeFile(
     path.join(destination, "src/screens.json"),
     JSON.stringify(getScreens(specification), null, 2) + "\n",

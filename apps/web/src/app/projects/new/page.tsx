@@ -52,7 +52,15 @@ export default function NewProject() {
   if (!ready) return <Loading />;
   const submit = async (input: ProjectInput) => {
     setSubmitError("");
-    const id = create(input);
+    let id: string;
+    try {
+      id = create(input);
+    } catch (error) {
+      setSubmitError(
+        error instanceof Error ? error.message : "Proje kaydedilemedi.",
+      );
+      return;
+    }
     setCreatedId(id);
     if (aiReady) {
       try {

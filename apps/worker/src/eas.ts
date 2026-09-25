@@ -98,6 +98,9 @@ async function verifyOutput(cwd: string) {
 export class EasManager {
   readonly jobs = new Map<string, EasJob>();
   private locked = false;
+  get busy() {
+    return this.locked;
+  }
   private writes = new Map<string, Promise<void>>();
   private refreshing = new Set<string>();
   private lastRefresh = new Map<string, number>();
