@@ -71,7 +71,14 @@ export class PlannerManager {
     const project = projectSchema
       .safeExtend({ id: projectIdSchema })
       .parse(input);
-    const existing = this.jobs.get(project.id);
+    const previous = this.jobs.get(project.id);
+    const newAnalysis =
+      previous &&
+      getSpecification(project).revision > previous.baseRevision &&
+      project.plannerJobId !== previous.id;
+    if (newAnalysis && previous.status === "running")
+      throw new Error("Mevcut AI analizinin tamamlanmasını bekleyin.");
+    const existing = newAnalysis ? undefined : previous;
     if (existing && (existing.status !== "failed" || !retry)) return existing;
     if (!this.enabled)
       throw new Error("AI için worker ortamında OPENAI_API_KEY ayarlayın.");
@@ -89,10 +96,17 @@ export class PlannerManager {
     const limit = existing?.taskLimitUsd ?? 0.1;
     const cost = existing?.costUsd ?? 0;
     const uncertain = existing?.uncertainCostUsd ?? 0;
-    const prior = existing?.priorCostUsd ?? project.aiCost;
+    const prior =
+      existing?.priorCostUsd ??
+      Math.max(
+        project.aiCost,
+        previous
+          ? previous.priorCostUsd + previous.costUsd + previous.uncertainCostUsd
+          : 0,
+      );
     if (
       cost + uncertain + reserved > limit ||
-      prior + cost + uncertain + reserved > source.budgetLimit
+      prior + cost + uncertain + reserved > project.budgetLimit
     )
       throw new Error("AI görevi veya proje bütçesi bu istek için yetersiz.");
     const job: PlannerJob = {
@@ -106,7 +120,7 @@ export class PlannerManager {
         idea: source.idea,
         android: source.android,
         ios: source.ios,
-        budgetLimit: source.budgetLimit,
+        budgetLimit: project.budgetLimit,
       },
       priorCostUsd: prior,
       status: "running",

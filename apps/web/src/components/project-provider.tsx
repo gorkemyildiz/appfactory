@@ -12,6 +12,7 @@ import { supabase, projectRepository } from "@/lib/cloud-projects";
 import { projectSchema } from "@app-factory/schemas";
 import {
   projectInputSchema,
+  editProjectOverview,
   applyPlannerResult,
   type PlannerJob,
   reviseProject,
@@ -50,6 +51,7 @@ type Store = Snapshot & {
     revision: number,
   ) => void;
   create: (input: ProjectInput) => string;
+  editOverview: (id: string, input: ProjectInput, expected: Project) => void;
   advance: (id: string, event: WorkflowEvent) => void;
   syncGeneration: (job: GenerationJob) => void;
   syncBuilder: (job: BuilderJob) => void;
@@ -369,6 +371,15 @@ function advance(id: string, event: WorkflowEvent) {
     ),
   );
 }
+function editOverview(id: string, input: ProjectInput, expected: Project) {
+  const projects = currentProjects();
+  const current = projects.find((project) => project.id === id);
+  if (!current) throw new Error("Proje bulunamadı.");
+  const next = editProjectOverview(current, input, expected);
+  persistProjects(
+    projects.map((project) => (project.id === id ? next : project)),
+  );
+}
 function approveDesign(
   id: string,
   screens: readonly string[],
@@ -539,6 +550,7 @@ export function ProjectProvider({ children }: { children: ReactNode }) {
         loadCloudVersion,
         restoreLocalProject,
         create,
+        editOverview,
         advance,
         syncGeneration,
         syncBuilder,

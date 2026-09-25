@@ -52,7 +52,7 @@ export function PlannerPanel({ project }: { project: Project }) {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           project: { ...project, revisions: [] },
-          retry: job?.status === "failed",
+          retry: job?.status === "failed" && !stale,
         }),
       });
       const data = await r.json();
@@ -65,6 +65,8 @@ export function PlannerPanel({ project }: { project: Project }) {
     }
   };
   const applied = job?.id === project.plannerJobId;
+  const stale =
+    !!job && !applied && getSpecification(project).revision > job.baseRevision;
   return (
     <Card className="mb-6 gap-3 p-5 shadow-none">
       <h2 className="font-semibold">AI Planner</h2>
@@ -100,13 +102,19 @@ export function PlannerPanel({ project }: { project: Project }) {
           {job.error && <p role="alert">{job.error}</p>}
         </div>
       )}
-      {(!job || job.status === "failed") && (
+      {(!job ||
+        job.status === "failed" ||
+        (stale && job.status !== "running")) && (
         <Button
           className="self-start"
-          disabled={!enabled || busy || (job?.attempts ?? 0) >= 3}
+          disabled={!enabled || busy || (!stale && (job?.attempts ?? 0) >= 3)}
           onClick={() => void start()}
         >
-          {job ? "Analizi yeniden dene" : "AI ile fikri analiz et"}
+          {stale
+            ? "Güncel fikirle yeni analiz başlat"
+            : job
+              ? "Analizi yeniden dene"
+              : "AI ile fikri analiz et"}
         </Button>
       )}
       {job?.output && (

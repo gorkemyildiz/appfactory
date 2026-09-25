@@ -20,11 +20,13 @@ import {
   sameSpecification,
   revisionRequestSchema,
   type BuilderJob,
+  type BuilderTask,
   type Project,
 } from "@app-factory/schemas";
 import { assertRealDirectory, generateProject } from "@app-factory/generator";
 import {
   runBuilder,
+  runFeatureBuilder,
   builderReservationUsd,
   builderTaskLimitUsd,
   PlannerError,
@@ -38,6 +40,17 @@ import {
   validateRecordUsage,
   screenRequirements,
 } from "./builder-code";
+import {
+  prepareApplication,
+  featureContext,
+  applicationModules,
+  writeFeatureCandidate,
+} from "./feature-build";
+import {
+  validateFeatures,
+  validateApplicationCode,
+  checkFeatureRules,
+} from "./feature-code";
 export class BuilderManager {
   readonly jobs = new Map<string, BuilderJob>();
   private locked = false;
@@ -54,6 +67,7 @@ export class BuilderManager {
     private run = runBuilder,
     private command = runCommand,
     private generate = generateProject,
+    private runFeatures = runFeatureBuilder,
   ) {}
   list(id: string) {
     return [...this.jobs.values()]
@@ -114,20 +128,25 @@ export class BuilderManager {
       this.jobs.set(job.id, job);
     }
   }
-  async start(input: Project, retry = false) {
+  async start(
+    input: Project,
+    retry = false,
+    mode: "application" | "screens" = "application",
+  ) {
     const project = projectSchema
       .safeExtend({ id: projectIdSchema })
       .parse(input);
     if (!this.enabled) throw new Error("Builder için OPENAI_API_KEY gerekli.");
     if (
       !["development", "tests", "build"].includes(project.stage) ||
-      !project.designReview?.images?.length ||
+      !project.designReview ||
       project.designReview.revision !== getSpecification(project).revision
     )
       throw new Error("Önce tüm tasarım görsellerini onaylayın.");
     const existing = this.list(project.id).find(
       (j) =>
         !j.change &&
+        (j.mode ?? "screens") === mode &&
         getSpecification(j.project).revision ===
           getSpecification(project).revision,
     );
@@ -147,6 +166,7 @@ export class BuilderManager {
     )
       throw new Error("Builder için proje bütçesi yetersiz.");
     const job: BuilderJob = existing ?? {
+      mode,
       id: randomUUID(),
       project,
       status: "running",
@@ -156,20 +176,39 @@ export class BuilderManager {
       error: null,
       setupLog: "",
       createdAt: new Date().toISOString(),
-      tasks: getScreens(getSpecification(project))
-        .filter((s) => s.enabled)
-        .map((s) => ({
-          screenId: s.id,
-          name: s.name,
-          status: "pending",
-          attempts: 0,
-          costUsd: 0,
-          reservedUsd: 0,
-          uncertainCostUsd: 0,
-          summary: "",
-          limitations: [],
-          log: "",
-        })),
+      tasks: [
+        ...(mode === "application"
+          ? [
+              {
+                kind: "features" as const,
+                screenId: "home",
+                name: "Veri modeli ve uygulama işlevleri",
+                status: "pending" as const,
+                attempts: 0,
+                costUsd: 0,
+                reservedUsd: 0,
+                uncertainCostUsd: 0,
+                summary: "",
+                limitations: [],
+                log: "",
+              },
+            ]
+          : []),
+        ...getScreens(getSpecification(project))
+          .filter((s) => s.enabled)
+          .map((s) => ({
+            screenId: s.id,
+            name: s.name,
+            status: "pending" as const,
+            attempts: 0,
+            costUsd: 0,
+            reservedUsd: 0,
+            uncertainCostUsd: 0,
+            summary: "",
+            limitations: [],
+            log: "",
+          })),
+      ],
     };
     this.locked = true;
     job.status = "running";
@@ -237,7 +276,7 @@ export class BuilderManager {
         {
           screenId: screen.id,
           name: screen.name,
-          status: "pending",
+          status: "pending" as const,
           attempts: 0,
           costUsd: 0,
           reservedUsd: 0,
@@ -322,6 +361,107 @@ export class BuilderManager {
       throw new Error("Builder dosya yolu geçersiz.");
     return target;
   }
+  private async executeFeatures(
+    job: BuilderJob,
+    task: BuilderTask,
+    cwd: string,
+  ) {
+    const context = await featureContext(cwd, job.project, task.log);
+    if (Buffer.byteLength(context) > 80000)
+      throw new Error("Uygulama bağlamı görev sınırını aşıyor.");
+    task.status = "running";
+    task.attempts++;
+    task.reservedUsd = builderReservationUsd;
+    await this.persist(job);
+    let accounted = false;
+    let rollback: (() => Promise<void>) | undefined;
+    try {
+      const result = await this.runFeatures({ context }, this.key);
+      task.costUsd += result.costUsd;
+      task.reservedUsd = 0;
+      accounted = true;
+      await this.persist(job);
+      await writeFile(
+        path.join(
+          this.root,
+          "workspace/builder",
+          `${job.id}-features-${task.attempts}.txt`,
+        ),
+        JSON.stringify(result.output, null, 2),
+        { flag: "wx", mode: 0o600 },
+      );
+      const output = validateFeatures(result.output);
+      const checks = await checkFeatureRules(output);
+      rollback = await writeFeatureCandidate(cwd, output);
+      task.log =
+        checks.map((c) => `İş kuralı: ${c.name} · Başarılı`).join("\n") + "\n";
+      for (const [name, args] of [
+        [
+          "TypeScript",
+          [path.join(cwd, "node_modules/typescript/bin/tsc"), "--noEmit"],
+        ],
+        [
+          "ESLint",
+          [
+            path.join(cwd, "node_modules/eslint/bin/eslint.js"),
+            ".",
+            "--max-warnings=0",
+          ],
+        ],
+      ] as const) {
+        const check = await this.command(
+          process.execPath,
+          [...args],
+          cwd,
+          120000,
+        );
+        task.log = (
+          task.log +
+          `${name}: ${check.exitCode === 0 ? "Başarılı" : "Başarısız"}\n${check.output}\n`
+        ).slice(-20000);
+        if (check.exitCode !== 0)
+          throw new Error(
+            `Uygulama işlevleri ${name} kontrolünü geçemedi. Dosyalar geri alındı.`,
+          );
+      }
+      task.summary = output.summary;
+      task.limitations = output.limitations;
+      job.implementation = {
+        summary: output.summary,
+        files: output.files.map((file) => file.path),
+        checks,
+        setup: [
+          ...output.setup,
+          ...(output.capabilities.includes("maps")
+            ? [
+                "Android dağıtımı için Google Maps anahtarını uygulama kimliğiyle sınırlandırıp yapılandırın; web önizlemesi konum listesi gösterir.",
+              ]
+            : []),
+        ],
+        coverage: output.coverage,
+      };
+      task.status = "ready";
+      await this.persist(job);
+    } catch (error) {
+      if (rollback) await rollback();
+      if (!accounted) {
+        if (error instanceof PlannerError && error.costUsd !== null)
+          task.costUsd += error.costUsd;
+        else task.uncertainCostUsd += task.reservedUsd;
+      }
+      task.reservedUsd = 0;
+      task.status = "failed";
+      job.implementation = undefined;
+      task.log = (
+        task.log +
+        "\n" +
+        (error instanceof Error
+          ? error.message
+          : "Uygulama işlevleri üretilemedi.")
+      ).slice(-20000);
+      throw error;
+    }
+  }
   private async execute(job: BuilderJob) {
     try {
       if (!job.outputPath) {
@@ -345,6 +485,15 @@ export class BuilderManager {
       if (path.resolve(this.root, job.outputPath) !== cwd)
         throw new Error("Builder çıktı yolu geçersiz.");
       await assertRealDirectory(cwd);
+      if (
+        job.mode === "application" &&
+        !job.change &&
+        !job.applicationPrepared
+      ) {
+        await prepareApplication(this.root, cwd);
+        job.applicationPrepared = true;
+        await this.persist(job);
+      }
       if (!job.installed) {
         const result = await this.command(
           "npm",
@@ -376,6 +525,10 @@ export class BuilderManager {
           job.project.budgetLimit
         )
           throw new Error("Proje bütçesi sonraki ekran için yetersiz.");
+        if (task.kind === "features") {
+          await this.executeFeatures(job, task, cwd);
+          continue;
+        }
         const file = screenFile(task.screenId);
         const target = await this.checkedFile(cwd, file);
         const modules: Record<string, string> = {};
@@ -393,14 +546,26 @@ export class BuilderManager {
           );
         }
         const originalCode = await readFile(target, "utf8");
+        const applicationMode =
+          job.mode === "application" ||
+          (job.change &&
+            (await lstat(path.join(cwd, "src/features/store.tsx"))
+              .then(() => true)
+              .catch(() => false)));
+        if (applicationMode)
+          Object.assign(modules, await applicationModules(cwd));
         const spec = getSpecification(job.project);
         const context = JSON.stringify({
           task: job.change ? "REVISE_SCREEN" : "BUILD_SCREEN",
+          applicationMode: !!applicationMode,
           changeRequest: job.change?.instruction,
           file,
           projectMemory: {
             name: job.project.name,
             summary: spec.plan.summary,
+            idea: job.project.idea,
+            scope: spec.plan.scope,
+            tasks: job.project.plannerDraft?.tasks,
             design: spec.design,
           },
           screen: getScreens(spec).find((s) => s.id === task.screenId),
@@ -410,7 +575,14 @@ export class BuilderManager {
           ),
           modules,
           currentCode: originalCode,
-          requirements: screenRequirements(file),
+          requirements: applicationMode
+            ? {
+                useApp: true,
+                enabledRoutes: getScreens(spec)
+                  .filter((s) => s.enabled)
+                  .map((s) => screenFile(s.id)),
+              }
+            : screenRequirements(file),
           previousDiagnostics: task.log.slice(-8000),
         });
         let image: Buffer | undefined;
@@ -422,7 +594,10 @@ export class BuilderManager {
             ),
           );
         } catch (error) {
-          if (!job.change || (error as NodeJS.ErrnoException).code !== "ENOENT")
+          if (
+            (!job.change && !applicationMode) ||
+            (error as NodeJS.ErrnoException).code !== "ENOENT"
+          )
             throw error;
         }
         if (Buffer.byteLength(context) > 80000)
@@ -452,10 +627,15 @@ export class BuilderManager {
             result.output.code,
             { flag: "wx", mode: 0o600 },
           );
-          validateScreenCode(result.output.code, file);
+          if (applicationMode)
+            validateApplicationCode(result.output.code, file, true);
+          else validateScreenCode(result.output.code, file);
           const code = cleanScreenImports(result.output.code, file);
-          validateRecordContract(code, file);
-          validateRecordUsage(code, file);
+          if (applicationMode) validateApplicationCode(code, file, true);
+          else {
+            validateRecordContract(code, file);
+            validateRecordUsage(code, file);
+          }
           candidateWritten = true;
           await writeFile(target, code + "\n");
           task.log = "";
@@ -511,6 +691,7 @@ export class BuilderManager {
         JSON.stringify(
           {
             tasks: job.tasks,
+            implementation: job.implementation,
             totalCostUsd: this.totalCost(job.project.id),
             note: "Kod kontrolleri tamamlandı. Cihaz testi ve görsel uyum incelemesi ayrıca gerekli.",
           },

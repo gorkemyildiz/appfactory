@@ -57,7 +57,9 @@ export function BuilderPanel({
         const current =
           jobs.find(
             (j) =>
-              !j.change && getSpecification(j.project).revision === revision,
+              !j.change &&
+              j.mode === "application" &&
+              getSpecification(j.project).revision === revision,
           ) ?? null;
         setJob(current);
         setHistory(jobs.filter((j) => j.id !== current?.id));
@@ -125,22 +127,24 @@ export function BuilderPanel({
       {section === "development" && (
         <Card className="shadow-none">
           <CardHeader>
-            <CardTitle>Görselden Expo uygulamasına</CardTitle>
+            <CardTitle>Plan ve tasarımdan çalışan uygulamaya</CardTitle>
             <CardDescription>
-              Onayladığınız her ekran ayrı bir AI göreviyle kodlanır. TypeScript
-              ve ESLint her ekranın ardından çalışır.
+              Önce veri modeli, iş kuralları, kayıt ve servis işlemleri
+              üretilir. Ekranlar bu ortak işlevlere bağlanır. İş kuralı
+              örnekleri, TypeScript ve ESLint sonuçları aşağıda gösterilir.
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
             <p className="text-sm text-muted-foreground">
-              Ekran başına en fazla $0.24; her denemede $0.08 bütçe ayrılır.
-              Hatalı görevlerde otomatik tekrar yapılmaz; en fazla iki kez
-              yeniden deneyebilirsiniz.
+              Ortak işlevler ve her ekran için görev başına en fazla $0.24; her
+              denemede $0.08 bütçe ayrılır. Hatalı görevlerde otomatik tekrar
+              yapılmaz; en fazla iki kez yeniden deneyebilirsiniz.
             </p>
             <p className="text-sm text-muted-foreground">
-              Bu sürüm ekran tasarımı ve mevcut yerel kayıt işlemlerini kapsar.
-              Gerçek hesap, sunucu bağlantısı ve plandaki diğer entegrasyonlar
-              henüz tamamlanmış sayılmaz.
+              Yerel özellikler ve desteklenen servis bağlantıları fikrinize göre
+              kodlanır. Hesap, ortak veri, konum veya kamera kullanan
+              uygulamalarda gerekli servis kurulumu ve cihaz izinleri ayrıca
+              gösterilir.
             </p>
             {error && (
               <p role="alert" className="text-sm text-destructive">
@@ -177,17 +181,17 @@ export function BuilderPanel({
               {sending
                 ? "Başlatılıyor…"
                 : busy
-                  ? "Ekranlar hazırlanıyor…"
+                  ? "Uygulama hazırlanıyor…"
                   : job?.status === "ready"
                     ? "Expo kod kontrolleri tamamlandı"
                     : job?.status === "failed"
                       ? "Başarısız görevden devam et"
-                      : "Onaylı tasarımları kodla"}
+                      : "Uygulama işlevlerini ve ekranları üret"}
             </Button>
             {job && (
               <p className="text-xs text-muted-foreground">
                 {job.tasks.filter((t) => t.status === "ready").length}/
-                {job.tasks.length} ekran · Builder maliyeti: $
+                {job.tasks.length} görev · Builder maliyeti: $
                 {job.tasks.reduce((n, t) => n + t.costUsd, 0).toFixed(6)} ·
                 Ayrılan / belirsiz: $
                 {job.tasks
@@ -195,6 +199,67 @@ export function BuilderPanel({
                   .toFixed(6)}
               </p>
             )}
+          </CardContent>
+        </Card>
+      )}
+      {job?.implementation && (
+        <Card className="shadow-none">
+          <CardHeader>
+            <CardTitle className="text-base">
+              Üretilen uygulama işlevleri
+            </CardTitle>
+            <CardDescription>{job.implementation.summary}</CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <p className="text-sm text-muted-foreground">
+              {job.implementation.checks.length} iş kuralı örneği doğrulandı. Bu
+              kontroller cihaz ve canlı sunucu testinin yerine geçmez.
+            </p>
+            <ul className="space-y-3">
+              {job.implementation.coverage.map((item, index) => (
+                <li key={index} className="rounded-md border p-3 text-sm">
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <span className="font-medium">{item.requirement}</span>
+                    <Badge variant="outline">
+                      {
+                        {
+                          implemented: "Kodlandı",
+                          needs_setup: "Kurulum gerekli",
+                          unsupported: "Desteklenmiyor",
+                        }[item.status]
+                      }
+                    </Badge>
+                  </div>
+                  <p className="mt-2 text-muted-foreground">{item.detail}</p>
+                </li>
+              ))}
+            </ul>
+            {job.implementation.setup.length > 0 && (
+              <div className="rounded-md border border-amber-300 p-4">
+                <h3 className="mb-2 text-sm font-medium">
+                  Uygulamayı kullanmadan önce
+                </h3>
+                <ul className="list-disc space-y-2 pl-5 text-sm">
+                  {job.implementation.setup.map((step, index) => (
+                    <li key={index}>{step}</li>
+                  ))}
+                </ul>
+                <p className="mt-3 text-xs text-muted-foreground">
+                  Sunucu kurulumu otomatik yapılmadı. Kurulum dosyaları ve
+                  migration üretilen uygulama klasöründedir.
+                </p>
+              </div>
+            )}
+            <details className="text-sm">
+              <summary>İş kuralı kontrolleri</summary>
+              <ul className="mt-2 list-disc pl-5">
+                {job.implementation.checks.map((check, index) => (
+                  <li key={index}>
+                    {check.name} · {check.passed ? "Geçti" : "Başarısız"}
+                  </li>
+                ))}
+              </ul>
+            </details>
           </CardContent>
         </Card>
       )}
@@ -223,7 +288,10 @@ export function BuilderPanel({
       )}
       {section !== "build" &&
         job?.tasks.map((task) => (
-          <Card key={task.screenId} className="shadow-none">
+          <Card
+            key={`${task.kind ?? "screen"}:${task.screenId}`}
+            className="shadow-none"
+          >
             <CardHeader>
               <div className="flex items-center justify-between gap-3">
                 <CardTitle className="text-base">{task.name}</CardTitle>

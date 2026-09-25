@@ -1,6 +1,7 @@
 "use client";
 import Link from "next/link";
 import { BuilderPanel } from "@/components/builder-panel";
+import { OverviewEditor } from "@/components/overview-editor";
 import { DesignGallery } from "@/components/design-gallery";
 import { PlannerPanel } from "@/components/planner-panel";
 import { ScreenEditor } from "@/components/screen-editor";
@@ -48,16 +49,7 @@ export function ProjectSection({ section }: { section: Section }) {
           "Genel Bakış",
           "Projenizin mevcut durumu ve bir sonraki adımı.",
         )}
-        <Card className="mb-5 shadow-none">
-          <CardHeader>
-            <CardTitle className="text-base">Proje fikri</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <p className="whitespace-pre-wrap text-sm leading-7 text-muted-foreground">
-              {project.idea}
-            </p>
-          </CardContent>
-        </Card>
+        <OverviewEditor key={project.id} project={project} />
         <div className="mb-5 grid gap-4 sm:grid-cols-3">
           {[
             ["Mevcut aşama", stageLabels[project.stage]],
@@ -173,7 +165,7 @@ export function ProjectSection({ section }: { section: Section }) {
         project={project}
       />
     );
-  if (project.designReview?.images?.length)
+  if (project.designReview)
     return (
       <BuilderPanel
         section={section}

@@ -304,6 +304,54 @@ export function sameSpecification(a: Project, b: Project) {
     JSON.stringify(getSpecification(a)) === JSON.stringify(getSpecification(b))
   );
 }
+export function editProjectOverview(
+  project: Project,
+  input: unknown,
+  expected: Project,
+  now = new Date().toISOString(),
+): Project {
+  if (
+    JSON.stringify(projectInputSchema.parse(project)) !==
+      JSON.stringify(projectInputSchema.parse(expected)) ||
+    !sameSpecification(project, expected) ||
+    project.stage !== expected.stage
+  )
+    throw new Error("Proje değişti. Güncel bilgileri yükleyip tekrar deneyin.");
+  const next = projectInputSchema.parse(input);
+  const currentInput = projectInputSchema.parse(project);
+  if (JSON.stringify(next) === JSON.stringify(currentInput)) return project;
+  const contentChanged =
+    next.name !== project.name ||
+    next.idea !== project.idea ||
+    next.android !== project.android ||
+    next.ios !== project.ios;
+  if (!contentChanged) return { ...project, ...next, updatedAt: now };
+  const current = getSpecification(project);
+  return {
+    ...project,
+    ...next,
+    stage: project.stage === "idea" ? "idea" : "plan",
+    specification: {
+      ...current,
+      revision: current.revision + 1,
+      plan: project.specification
+        ? current.plan
+        : { ...current.plan, summary: next.idea },
+    },
+    designReview: undefined,
+    plannerJobId: undefined,
+    plannerDraft: undefined,
+    revisions: [
+      ...(project.revisions ?? []),
+      {
+        specification: current,
+        changedSection: "plan" as const,
+        savedAt: now,
+      },
+    ].slice(-20),
+    updatedAt: now,
+  };
+}
 export function reviseProject(
   project: Project,
   section: SpecificationSection,
@@ -544,6 +592,7 @@ export function builderJsonSchema() {
   return schema;
 }
 export const builderTaskSchema = z.object({
+  kind: z.enum(["features", "screen"]).optional(),
   screenId: screenIdSchema,
   name: z.string(),
   status: z.enum(["pending", "running", "ready", "failed"]),
@@ -567,6 +616,23 @@ export const revisionRequestSchema = z.object({
   retry: z.boolean().default(false),
 });
 export const builderJobSchema = z.object({
+  applicationPrepared: z.boolean().optional(),
+  mode: z.enum(["application", "screens"]).optional(),
+  implementation: z
+    .object({
+      summary: z.string(),
+      files: z.array(z.string()),
+      checks: z.array(z.object({ name: z.string(), passed: z.boolean() })),
+      setup: z.array(z.string()),
+      coverage: z.array(
+        z.object({
+          requirement: z.string(),
+          status: z.enum(["implemented", "needs_setup", "unsupported"]),
+          detail: z.string(),
+        }),
+      ),
+    })
+    .optional(),
   change: codeChangeSchema.optional(),
   id: z.uuid(),
   project: projectSchema.safeExtend({ id: projectIdSchema }),
@@ -574,7 +640,7 @@ export const builderJobSchema = z.object({
   outputPath: z.string(),
   setupAttempts: z.number().int().min(0).max(3),
   installed: z.boolean(),
-  tasks: z.array(builderTaskSchema).min(1).max(20),
+  tasks: z.array(builderTaskSchema).min(1).max(21),
   error: z.string().nullable(),
   setupLog: z.string(),
   createdAt: z.iso.datetime(),
@@ -674,3 +740,56 @@ export const previewRequestSchema = z.discriminatedUnion("action", [
     platforms: z.array(z.enum(["ios", "android"])).min(1),
   }),
 ]);
+
+// App implementation is a bounded multi-file artifact. Configuration and package
+// installation remain deterministic worker responsibilities.
+export const featureFiles = [
+  "src/features/models.ts",
+  "src/features/domain.ts",
+  "src/features/store.tsx",
+  "src/features/services.ts",
+] as const;
+export const featureOutputSchema = z.object({
+  files: z
+    .array(
+      z.object({
+        path: z.enum(featureFiles),
+        code: z.string().min(10).max(50000),
+      }),
+    )
+    .length(4),
+  summary: z.string().min(1).max(2000),
+  limitations: z.array(z.string().min(1).max(500)).max(15),
+  capabilities: z
+    .array(z.enum(["storage", "backend", "location", "camera", "maps"]))
+    .max(5),
+  migrationSql: z.string().max(50000),
+  setup: z.array(z.string().min(1).max(1000)).max(15),
+  coverage: z
+    .array(
+      z.object({
+        requirement: z.string().min(1).max(500),
+        status: z.enum(["implemented", "needs_setup", "unsupported"]),
+        detail: z.string().min(1).max(1000),
+      }),
+    )
+    .min(1)
+    .max(30),
+  tests: z
+    .array(
+      z.object({
+        name: z.string().min(1).max(200),
+        exportName: z.string().regex(/^[a-zA-Z][a-zA-Z0-9_]*$/),
+        argsJson: z.string().max(10000),
+        expectedJson: z.string().max(10000),
+      }),
+    )
+    .min(3)
+    .max(30),
+});
+export type FeatureOutput = z.infer<typeof featureOutputSchema>;
+export function featureJsonSchema() {
+  const schema = z.toJSONSchema(featureOutputSchema);
+  delete schema.$schema;
+  return schema;
+}

@@ -120,7 +120,7 @@ test("Builder stops on failed checks, resumes only failed task and is idempotent
       },
     );
     await m.initialize();
-    const job = await m.start(project);
+    const job = await m.start(project, false, "screens");
     await finish(m);
     assert.equal(job.status, "failed");
     assert.equal(job.tasks[0]?.status, "ready");
@@ -129,15 +129,15 @@ test("Builder stops on failed checks, resumes only failed task and is idempotent
       await readFile(path.join(root, job.outputPath, "app/create.tsx"), "utf8"),
       await readFile("templates/expo-base/app/create.tsx", "utf8"),
     );
-    await m.start(project);
+    await m.start(project, false, "screens");
     assert.equal(calls, 2);
-    await m.start(project, true);
+    await m.start(project, true, "screens");
     await finish(m);
     assert.equal(job.status, "ready");
     assert.equal(calls, 3);
     assert.equal(job.tasks[0]?.attempts, 1);
     assert.equal(job.tasks[1]?.attempts, 2);
-    await m.start(project, true);
+    await m.start(project, true, "screens");
     assert.equal(calls, 3);
     assert.ok(Math.abs(m.totalCost(project.id) - 0.07) < 1e-8);
     const restarted = new BuilderManager(root);
@@ -161,17 +161,17 @@ test("Builder enforces approval, shared budget and two manual retries", async ()
     );
     await m.initialize();
     await assert.rejects(
-      m.start({ ...project, designReview: undefined }),
+      m.start({ ...project, designReview: undefined }, false, "screens"),
       /onaylayın/,
     );
-    await assert.rejects(m.start({ ...project, budgetLimit: 0.01 }), /bütçesi/);
-    await m.start(project);
+    await assert.rejects(m.start({ ...project, budgetLimit: 0.01 }, false, "screens"), /bütçesi/);
+    await m.start(project, false, "screens");
     await finish(m);
-    await m.start(project, true);
+    await m.start(project, true, "screens");
     await finish(m);
-    await m.start(project, true);
+    await m.start(project, true, "screens");
     await finish(m);
-    await assert.rejects(m.start(project, true), /iki yeniden/);
+    await assert.rejects(m.start(project, true, "screens"), /iki yeniden/);
     assert.equal(m.list(project.id)[0]?.tasks[0]?.attempts, 3);
   } finally {
     await rm(root, { recursive: true, force: true });
