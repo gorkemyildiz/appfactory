@@ -125,6 +125,10 @@ test("EAS persists one submission, polls completion and keeps device test unperf
     const job = await m.start(f.request);
     await finish(m, job.id);
     assert.equal(job.status, "queued");
+    await assert.rejects(
+      m.complete(project, f.source.id, job.id),
+      /APK derlemesi/,
+    );
     await m.start(f.request);
     assert.equal(builds, 1);
     await m.refresh(job.id, project.id);
@@ -142,6 +146,13 @@ test("EAS persists one submission, polls completion and keeps device test unperf
     const restarted = new EasManager(f.root, () => f.source);
     await restarted.initialize();
     assert.equal(restarted.jobs.get(job.id)?.buildId, buildId);
+    await restarted.complete(project, f.source.id, job.id);
+    assert.equal(restarted.jobs.get(job.id)?.deviceTest, "passed");
+    await writeFile(path.join(f.cwd, "changed.txt"), "changed");
+    await assert.rejects(
+      restarted.complete(project, f.source.id, job.id),
+      /kaynak sürümü/,
+    );
   } finally {
     await rm(f.root, { recursive: true, force: true });
   }

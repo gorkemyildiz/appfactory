@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { mkdtemp, cp, readFile, rm, access } from "node:fs/promises";
+import { mkdtemp, cp, readFile, rm, access, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import {
@@ -15,6 +15,45 @@ import {
 } from "./feature-code";
 import { BuilderManager } from "./builder";
 import { generateProject } from "@app-factory/generator";
+import { ensureDemoSupport } from "./feature-build";
+import { PlannerError } from "@app-factory/ai";
+
+test("legacy output receives missing demo modules once without replacing application code", async () => {
+  const root = await mkdtemp(path.join(tmpdir(), "legacy-demo-"));
+  try {
+    const cwd = path.join(root, "app");
+    await cp(path.resolve("templates/expo-base"), cwd, { recursive: true });
+    await rm(path.join(cwd, "src/demo.tsx"));
+    await rm(path.join(cwd, "src/demo-state.ts"));
+    const layout =
+      "export default function Layout(){return <AppProvider><RecordsProvider><Stack /></RecordsProvider></AppProvider>}";
+    await writeFile(path.join(cwd, "app/_layout.tsx"), layout);
+    const records = await readFile(path.join(cwd, "src/records.tsx"), "utf8");
+    await ensureDemoSupport(process.cwd(), cwd);
+    const updated = await readFile(path.join(cwd, "app/_layout.tsx"), "utf8");
+    assert.match(updated, /<DemoProvider><AppProvider>/);
+    await access(path.join(cwd, "src/demo-state.ts"));
+    await writeFile(
+      path.join(cwd, "src/demo.tsx"),
+      "// preserved custom module",
+    );
+    await ensureDemoSupport(process.cwd(), cwd);
+    assert.equal(
+      await readFile(path.join(cwd, "app/_layout.tsx"), "utf8"),
+      updated,
+    );
+    assert.equal(
+      await readFile(path.join(cwd, "src/demo.tsx"), "utf8"),
+      "// preserved custom module",
+    );
+    assert.equal(
+      await readFile(path.join(cwd, "src/records.tsx"), "utf8"),
+      records,
+    );
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
 
 const project: Project = {
   id: "features-test",
@@ -157,6 +196,35 @@ test("feature output cannot write configuration, import host modules or skip ext
     /useApp/,
   );
 });
+test("backend reporting is normalized without accepting missing setup or changing generated code", () => {
+  const candidate: FeatureOutput = {
+    ...output,
+    capabilities: ["backend"],
+    migrationSql: "alter table entries enable row level security;",
+    setup: ["Migration dosyasını uygulayın ve bağlantıyı doğrulayın."],
+    coverage: [
+      { requirement: "Kayıt", status: "implemented", detail: "x".repeat(1000) },
+      {
+        requirement: "Desteklenmeyen",
+        status: "unsupported",
+        detail: "Destek yok.",
+      },
+    ],
+  };
+  const result = validateFeatures(candidate);
+  assert.equal(result.coverage[0]?.status, "needs_setup");
+  assert.ok(result.coverage[0]!.detail.length <= 1000);
+  assert.equal(result.coverage[1]?.status, "unsupported");
+  assert.deepEqual(result.files, candidate.files);
+  assert.equal(candidate.coverage[0]?.status, "implemented");
+  assert.deepEqual(validateFeatures(result), result);
+  assert.throws(() => validateFeatures({ ...candidate, setup: [] }), /kurulum/);
+  assert.throws(
+    () => validateFeatures({ ...candidate, migrationSql: "select 1" }),
+    /RLS/,
+  );
+  assert.deepEqual(validateFeatures(output).coverage, output.coverage);
+});
 test("application Builder generates shared features before connected screens and persists evidence", async () => {
   const root = await mkdtemp(path.join(tmpdir(), "application-builder-"));
   try {
@@ -186,6 +254,8 @@ test("application Builder generates shared features before connected screens and
       generateProject,
       async (input) => {
         calls.push(JSON.parse(input.context).task);
+        if (calls.length < 3)
+          throw new PlannerError("Geçici model hatası", 0.01);
         return { output, costUsd: 0.02 };
       },
     );
@@ -193,9 +263,16 @@ test("application Builder generates shared features before connected screens and
     const job = await manager.start(project);
     await finished(manager);
     assert.equal(job.status, "ready", job.error ?? "");
-    assert.deepEqual(calls, ["BUILD_APPLICATION_FEATURES", "BUILD_SCREEN"]);
+    assert.deepEqual(calls, [
+      "BUILD_APPLICATION_FEATURES",
+      "BUILD_APPLICATION_FEATURES",
+      "BUILD_APPLICATION_FEATURES",
+      "BUILD_SCREEN",
+    ]);
+    assert.equal(job.tasks[0]?.attempts, 3);
+    assert.equal(job.error, null);
     assert.equal(job.implementation?.checks.length, 8);
-    assert.equal(manager.totalCost(project.id), 0.03);
+    assert.equal(manager.totalCost(project.id), 0.05);
     assert.match(
       await readFile(
         path.join(root, job.outputPath, "app/_layout.tsx"),
@@ -211,7 +288,7 @@ test("application Builder generates shared features before connected screens and
     );
     assert.equal(config.publishableKey, "");
     await manager.start(project);
-    assert.equal(calls.length, 2);
+    assert.equal(calls.length, 4);
     const restarted = new BuilderManager(root);
     await restarted.initialize();
     assert.equal(restarted.jobs.get(job.id)?.implementation?.checks.length, 8);
@@ -246,11 +323,32 @@ test("failed feature checks roll back every generated module and retry only the 
     assert.equal(job.implementation, undefined);
     for (const file of output.files)
       await assert.rejects(access(path.join(root, job.outputPath, file.path)));
-    await manager.start(project, true);
+    assert.equal(job.tasks[0]?.attempts, 3);
+    await assert.rejects(manager.start(project, true));
+    await assert.rejects(
+      manager.start(project, true, "application", {
+        confirmed: true,
+        model: "invalid",
+        jobId: job.id,
+        expectedAttempts: 3,
+      }),
+    );
+    const approval = {
+      confirmed: true,
+      model: "gpt-4.1-mini",
+      jobId: job.id,
+      expectedAttempts: 3,
+    };
+    await manager.start(project, true, "application", approval);
     await finished(manager);
-    assert.equal(job.tasks[0]?.attempts, 2);
+    assert.equal(job.tasks[0]?.attempts, 4);
+    assert.equal(job.tasks[0]?.model, "gpt-4.1-mini");
+    await assert.rejects(
+      manager.start(project, true, "application", approval),
+      /yeniden onay/,
+    );
     assert.equal(job.tasks[1]?.attempts, 0);
-    assert.equal(manager.totalCost(project.id), 0.02);
+    assert.equal(manager.totalCost(project.id), 0.04);
   } finally {
     await rm(root, { recursive: true, force: true });
   }

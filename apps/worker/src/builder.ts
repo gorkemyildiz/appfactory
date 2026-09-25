@@ -13,6 +13,7 @@ import { randomUUID } from "node:crypto";
 import path from "node:path";
 import {
   builderJobSchema,
+  builderRetryApprovalSchema,
   projectSchema,
   projectIdSchema,
   getScreens,
@@ -46,6 +47,7 @@ import {
 } from "./builder-code";
 import {
   prepareApplication,
+  ensureDemoSupport,
   featureContext,
   applicationModules,
   writeFeatureCandidate,
@@ -136,6 +138,7 @@ export class BuilderManager {
     input: Project,
     retry = false,
     mode: "application" | "screens" = "application",
+    approval?: unknown,
   ) {
     const project = projectSchema
       .safeExtend({ id: projectIdSchema })
@@ -159,7 +162,21 @@ export class BuilderManager {
     if (existing && (existing.status !== "failed" || !retry)) return existing;
     if (this.locked)
       throw new Error("Bir Builder işi sürüyor. Tamamlanmasını bekleyin.");
-    if (existing?.tasks.some((t) => t.status !== "ready" && t.attempts >= 3))
+    const failedTask = existing?.tasks.find((t) => t.status !== "ready");
+    const manual =
+      existing && retry && mode === "application"
+        ? builderRetryApprovalSchema.parse(approval)
+        : undefined;
+    if (
+      manual &&
+      (manual.jobId !== existing?.id ||
+        manual.expectedAttempts !== failedTask?.attempts)
+    )
+      throw new Error("Görev değişti. Güncel görev için yeniden onay verin.");
+    if (
+      !manual &&
+      existing?.tasks.some((t) => t.status !== "ready" && t.attempts >= 3)
+    )
       throw new Error("Ekran için iki yeniden deneme hakkı kullanıldı.");
     if (existing && !existing.installed && existing.setupAttempts >= 3)
       throw new Error("Kurulum deneme sınırına ulaşıldı.");
@@ -170,6 +187,19 @@ export class BuilderManager {
     )
       throw new Error("Builder için proje bütçesi yetersiz.");
     await assertDesignAssets(this.root, project);
+    if (manual && failedTask) {
+      if (
+        failedTask.costUsd +
+          failedTask.uncertainCostUsd +
+          builderReservationUsd >
+        builderTaskLimitUsd + 0.000001
+      )
+        throw new Error(
+          "Görev bütçesi yetersiz. Manuel onay bütçe sınırını artırmaz.",
+        );
+      failedTask.model = manual.model;
+      failedTask.attemptLimit = Math.max(3, failedTask.attempts + 1);
+    }
     const job: BuilderJob = existing ?? {
       mode,
       id: randomUUID(),
@@ -371,6 +401,7 @@ export class BuilderManager {
     task: BuilderTask,
     cwd: string,
   ) {
+    await ensureDemoSupport(this.root, cwd);
     const context = await featureContext(cwd, job.project, task.log);
     if (Buffer.byteLength(context) > 80000)
       throw new Error("Uygulama bağlamı görev sınırını aşıyor.");
@@ -381,7 +412,10 @@ export class BuilderManager {
     let accounted = false;
     let rollback: (() => Promise<void>) | undefined;
     try {
-      const result = await this.runFeatures({ context }, this.key);
+      const result = await this.runFeatures(
+        { context, model: task.model },
+        this.key,
+      );
       task.costUsd += result.costUsd;
       task.reservedUsd = 0;
       accounted = true;
@@ -467,7 +501,8 @@ export class BuilderManager {
       throw error;
     }
   }
-  private async execute(job: BuilderJob) {
+  private async execute(job: BuilderJob, nested = false): Promise<void> {
+    const initialAttempts = job.tasks.map((task) => task.attempts);
     try {
       if (!job.outputPath) {
         job.setupAttempts++;
@@ -519,7 +554,7 @@ export class BuilderManager {
       for (const task of job.tasks) {
         if (task.status === "ready") continue;
         if (
-          task.attempts >= 3 ||
+          task.attempts >= (task.attemptLimit ?? 3) ||
           task.costUsd + task.uncertainCostUsd + builderReservationUsd >
             builderTaskLimitUsd + 0.000001
         )
@@ -615,7 +650,10 @@ export class BuilderManager {
         let accounted = false;
         let candidateWritten = false;
         try {
-          const result = await this.run({ context, image }, this.key);
+          const result = await this.run(
+            { context, image, model: task.model },
+            this.key,
+          );
           task.costUsd += result.costUsd;
           task.reservedUsd = 0;
           accounted = true;
@@ -670,9 +708,7 @@ export class BuilderManager {
             ).slice(-20000);
             await this.persist(job);
             if (check.exitCode !== 0)
-              throw new Error(
-                `${task.name}: ${label} kontrolü başarısız. Otomatik yeniden deneme yapılmadı.`,
-              );
+              throw new Error(`${task.name}: ${label} kontrolü başarısız.`);
           }
           task.status = "ready";
           await this.persist(job);
@@ -705,10 +741,31 @@ export class BuilderManager {
         ),
       );
       job.status = "ready";
+      job.error = null;
     } catch (error) {
       job.status = "failed";
       job.error =
         error instanceof Error ? error.message : "Builder tamamlanamadı.";
+      const index = job.tasks.findIndex((task) => task.status === "failed");
+      const failed = job.tasks[index];
+      if (
+        job.mode === "application" &&
+        !job.change &&
+        failed &&
+        !failed.model &&
+        failed.attempts > (initialAttempts[index] ?? 0) &&
+        failed.attempts < 3 &&
+        failed.costUsd + failed.uncertainCostUsd + builderReservationUsd <=
+          builderTaskLimitUsd + 0.000001 &&
+        Math.max(job.project.aiCost, this.totalCost(job.project.id)) +
+          builderReservationUsd <=
+          job.project.budgetLimit
+      ) {
+        job.status = "running";
+        job.error = `Otomatik yeniden deneme ${failed.attempts}/2: ${job.error}`;
+        await this.persist(job);
+        return await this.execute(job, true);
+      }
     } finally {
       try {
         await this.persist(job);
@@ -716,7 +773,7 @@ export class BuilderManager {
         job.status = "failed";
         job.error = "Builder iş kaydı yazılamadı.";
       }
-      this.locked = false;
+      if (!nested) this.locked = false;
     }
   }
 }

@@ -45,6 +45,7 @@ export function validateApplicationCode(
   );
   const locals = new Set<string>([
     ...featureFiles.map((f) => f.replace(/\.tsx?$/, "")),
+    "src/demo",
     "src/runtime/runtime",
     "src/runtime/map",
     "src/ui",
@@ -157,11 +158,21 @@ export function validateFeatures(input: unknown): FeatureOutput {
       throw new Error(
         "Migration RLS içermeli ve App Factory verilerine dokunmamalı.",
       );
-    // Code generation cannot establish that an external deployment has happened.
-    if (!output.coverage.some((c) => c.status === "needs_setup"))
-      throw new Error(
-        "Sunucu gereksinimleri kurulum bekliyor olarak raporlanmalı.",
+    // Deployment is not performed by the Builder. Recover inconsistent reporting
+    // without another paid call; never upgrade unsupported or pending coverage.
+    if (!output.coverage.some((c) => c.status === "needs_setup")) {
+      const notice =
+        "Sunucu kurulumu ve gerçek bağlantı doğrulaması bekliyor. ";
+      output.coverage = output.coverage.map((item) =>
+        item.status === "implemented"
+          ? {
+              ...item,
+              status: "needs_setup" as const,
+              detail: notice + item.detail.slice(0, 1000 - notice.length),
+            }
+          : item,
       );
+    }
   }
   return output;
 }

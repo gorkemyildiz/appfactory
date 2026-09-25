@@ -1,3 +1,4 @@
+import { ReleaseManager } from "./release";
 import { DesignAssetCloud } from "./design-cloud";
 import { EasManager } from "./eas";
 import { PreviewManager } from "./preview";
@@ -83,13 +84,34 @@ const resolveSource = (project: Project, sourceId: string) => {
   };
 };
 const preview = new PreviewManager(root, resolveSource);
+const release = new ReleaseManager(
+  root,
+  resolveSource,
+  (id) => {
+    const source = builder.jobs.get(id);
+    const implementation = source?.implementation;
+    return [
+      ...(implementation?.setup ?? []).map((item) => "Kurulum: " + item),
+      ...(implementation?.coverage ?? []).map(
+        (item) => "İşlev kontrolü: " + item.requirement + " — " + item.detail,
+      ),
+      ...(source?.project.plannerDraft?.tasks ?? []).flatMap((task) =>
+        task.acceptance.map((item) => "Kabul testi: " + item),
+      ),
+    ];
+  },
+  (project, id) => preview.assertApproved(project, id),
+);
 const eas = new EasManager(
   root,
   resolveSource,
   undefined,
   undefined,
   undefined,
-  (project, id) => preview.assertApproved(project, id),
+  async (project, id) => {
+    await preview.assertApproved(project, id);
+    await release.assertReady(project, id);
+  },
 );
 function committedCost(id: string) {
   return (
@@ -194,7 +216,30 @@ const server = createServer(async (request, response) => {
         return;
       }
       const input = easRequestSchema.parse(await readBody(request));
-      if (input.action === "start") send(202, { job: await eas.start(input) });
+      if (input.action === "checklist")
+        send(200, {
+          checklist: await release.info(input.project, input.sourceJobId),
+        });
+      else if (input.action === "check-item")
+        send(200, {
+          checklist: await release.set(
+            input.project,
+            input.sourceJobId,
+            input.fingerprint,
+            input.itemId,
+            input.checked,
+          ),
+        });
+      else if (input.action === "complete")
+        send(200, {
+          job: await eas.complete(
+            input.project,
+            input.sourceJobId,
+            input.jobId,
+          ),
+        });
+      else if (input.action === "start")
+        send(202, { job: await eas.start(input) });
       else
         send(200, {
           job: await eas.refresh(
@@ -226,7 +271,12 @@ const server = createServer(async (request, response) => {
       const body = await readBody(request);
       await syncDesignCloud(projectSchema.parse(body.project).id, true);
       send(202, {
-        job: await builder.start(body.project, body.retry === true),
+        job: await builder.start(
+          body.project,
+          body.retry === true,
+          "application",
+          body.approval,
+        ),
       });
       return;
     }

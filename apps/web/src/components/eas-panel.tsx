@@ -6,6 +6,7 @@ import {
   type EasJob,
   type Project,
 } from "@app-factory/schemas";
+import { ReleaseChecklistPanel } from "./release-checklist";
 import { Button } from "./ui/button";
 import { Badge } from "./ui/badge";
 import {
@@ -46,6 +47,8 @@ export function EasPanel({
     [error, setError] = useState(""),
     [connectionError, setConnectionError] = useState(""),
     [buildId, setBuildId] = useState("");
+  const [checklistReady, setChecklistReady] = useState(false);
+  const [acknowledged, setAcknowledged] = useState<string | null>(null);
   const current =
     jobs.filter((j) => j.sourceJobId === sourceJobId).at(-1) ?? null;
   const latest = jobs.at(-1) ?? null;
@@ -118,26 +121,34 @@ export function EasPanel({
       clearInterval(timer);
     };
   }, [project.id]);
-  async function action(kind: "start" | "refresh" | "reconcile") {
+  async function action(kind: "start" | "refresh" | "reconcile" | "complete") {
     if (pending) return;
     setPending(true);
     setError("");
     try {
       const body =
-        kind === "start"
+        kind === "complete"
           ? {
               action: kind,
               project: { ...project, revisions: [] },
               sourceJobId,
-              requestId: crypto.randomUUID(),
-              expectedLatestId: latest?.id ?? null,
+              jobId: current?.id,
+              confirmed: true,
             }
-          : {
-              action: kind,
-              projectId: project.id,
-              jobId: job?.id,
-              ...(kind === "reconcile" ? { buildId: buildId.trim() } : {}),
-            };
+          : kind === "start"
+            ? {
+                action: kind,
+                project: { ...project, revisions: [] },
+                sourceJobId,
+                requestId: crypto.randomUUID(),
+                expectedLatestId: latest?.id ?? null,
+              }
+            : {
+                action: kind,
+                projectId: project.id,
+                jobId: job?.id,
+                ...(kind === "reconcile" ? { buildId: buildId.trim() } : {}),
+              };
       const response = await fetch("/api/eas", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -203,10 +214,20 @@ export function EasPanel({
             {job.sourceJobId !== sourceJobId ? " · Önceki çıktıya ait" : ""}
           </p>
         )}
+        {sourceJobId && (
+          <ReleaseChecklistPanel
+            key={sourceJobId}
+            project={project}
+            sourceJobId={sourceJobId}
+            approved={previewApproved}
+            onReady={setChecklistReady}
+          />
+        )}
         <div className="flex flex-wrap gap-2">
           <Button
             onClick={() => void action("start")}
             disabled={
+              !checklistReady ||
               !previewApproved ||
               !loaded ||
               !enabled ||
@@ -224,7 +245,7 @@ export function EasPanel({
                 ? "Bu çıktının APK’sı hazır"
                 : attempts
                   ? "APK oluşturmayı yeniden dene"
-                  : "APK oluştur"}
+                  : "EAS’e gönder ve APK oluştur"}
           </Button>
           {job && (job.buildId || job.status === "unknown") && (
             <Button
@@ -293,8 +314,42 @@ export function EasPanel({
           </details>
         )}
         <p className="text-xs text-muted-foreground">
-          Gerçek Android cihaz testi: yapılmadı. iPhone’a APK kurulamaz.
+          {current?.deviceTest === "passed"
+            ? "Android cihaz testi kullanıcı tarafından onaylandı. Proje tamamlandı."
+            : "Android cihaz testi henüz onaylanmadı. iPhone’a APK kurulamaz."}
         </p>
+        {current?.status === "finished" &&
+          current.apkUrl &&
+          current.deviceTest !== "passed" && (
+            <div className="space-y-3 rounded-md border p-3">
+              <label className="flex gap-2 text-sm">
+                <input
+                  type="checkbox"
+                  checked={acknowledged === current.id}
+                  onChange={(e) =>
+                    setAcknowledged(e.target.checked ? current.id : null)
+                  }
+                />
+                APK’yı Android cihazda kurdum ve temel işlemleri test ettim.
+              </label>
+              <Button
+                disabled={
+                  pending ||
+                  acknowledged !== current.id ||
+                  !current.sourceFingerprint
+                }
+                onClick={() => void action("complete")}
+              >
+                Cihaz testini onayla ve tamamla
+              </Button>
+              {!current.sourceFingerprint && (
+                <p>
+                  Bu eski derlemede kaynak doğrulaması yok. Yeni çıktı ve
+                  derleme gerekli.
+                </p>
+              )}
+            </div>
+          )}
         {job?.log && (
           <details>
             <summary className="cursor-pointer text-sm">

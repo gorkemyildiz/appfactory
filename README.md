@@ -149,3 +149,21 @@ Başarılı revizyonlar sürüm seçicisinde görünür; eski sürüme dönmek m
 ### Ekran yönetimi
 
 Ekranlar sekmesinde en fazla 20 ekran tanımlanabilir. Ana ekran zorunludur; diğer ekranlar silinebilir. Kartlar başlangıçta kapalıdır; başlıktan veya Tümünü aç / Tümünü kapat düğmelerinden yönetilir. Yeni ekran otomatik açılır. Değişiklikler Ekranları kaydet ile ortak proje kaydına aktarılır ve ekran/tasarım onayları yenilenir. Mevcut üretilmiş çıktılar korunur. Özel ekranlar ayrı Expo rotası ve başlangıç içeriği alır; fikre özel davranışlar Builder aşamasında mevcut yetenekler kapsamında hazırlanır.
+
+Kod üretimi (uygulama işlevleri, ekranlar ve tek ekran revizyonları) GPT-6 Luna kullanır: gpt-6-luna, medium reasoning, Standard servis katmanı. Planner modeli değişmez. Builder maliyeti milyon token başına 0.10 USD giriş / 0.50 USD çıkış üzerinden hesaplanır; belirsiz maliyet rezervi ve görev sınırları korunur. Kaynak: https://developers.openai.com/api/docs/models/gpt-6-luna (25 Eylül 2026).
+
+
+### Demo testleri ve yayın tamamlama
+
+Yeni Expo çıktılarında geliştirme önizlemesi Demo veri modunda açılır. Demo verileri temizleme ve gerçek moda geçiş kontrolleri bulunur. Demo kayıtları gerçek yerel depoya/backend'e yazılmaz; APK gerçek modda açılır. Builder uygulamaya özel örnekleri yalnızca demo modunda üretir. Önceden üretilmiş çıktılar otomatik değiştirilmez.
+
+Derleme sekmesinde önizleme onayından sonra kurulum, bağlantı ve kabul testi maddeleri kullanıcı tarafından işaretlenir. Liste seçili kaynak ve dosya hash'ine bağlıdır; kod/bağlantı değişiklikleri onayları geçersizleştirir. Kayıtlar yerel workspace/release altında tutulur. Tüm maddeler tamamlanmadan EAS gönderimi worker tarafından engellenir. Gönderim hiçbir zaman otomatik değildir.
+
+APK hazır olduktan sonra kullanıcı gerçek Android cihaz testini ayrıca onaylar. Tamamlanma kaydı yalnızca aynı kaynak dosyaları için tutulur; eski hash içermeyen EAS kayıtları tamamlandı olarak işaretlenemez. Model testleri gerçek cihaz veya backend kurulumu kanıtı değildir.
+
+### Geliştirme görevlerinde yeniden deneme
+
+Uygulama Builder görevleri ilk çağrıdan sonra en fazla iki otomatik tekrar yapar. Başarılı görevler tekrar çalışmaz; önceki hata tanısı sonraki çağrıya eklenir. Bütçe veya yerel hazırlık engellerinde ücretli tekrar yapılmaz. Başarısızlık sürerse panel model seçimi ve açık onay ister. Her onay yalnızca başarısız görev için bir ek denemeye izin verir; eski onay farklı deneme sayısında kullanılamaz. Sayaç ve maliyet sıfırlanmaz. Tek ekran revizyonunun mevcut manuel tekrar davranışı korunur.
+
+Manuel seçenekler GPT-6 Luna ve GPT-4.1 mini. Model isteğe aktarılır; GPT-4.1 mini için reasoning parametresi gönderilmez. Standard token fiyatları sırasıyla $0.10/$0.50 ve $0.40/$1.60 (1M giriş/çıkış); görev limiti $0.24 ve deneme rezervi $0.08 değişmedi. Manuel onay bütçe limitini aşmaz.
+Kaynaklar: https://developers.openai.com/api/docs/models/gpt-6-luna ve https://developers.openai.com/api/docs/models/gpt-4.1-mini (25 Eylül 2026).

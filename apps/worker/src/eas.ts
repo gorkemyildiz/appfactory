@@ -1,3 +1,4 @@
+import { sourceFingerprint } from "./preview";
 import { runCommand } from "./runner";
 import {
   mkdir,
@@ -192,6 +193,31 @@ export class EasManager {
     if (!(await lstat(p)).isFile() || (await realpath(p)) !== p)
       throw new Error("EAS yapılandırma yolu geçersiz.");
     return JSON.parse(await readFile(p, "utf8"));
+  }
+  async complete(project: Project, sourceId: string, jobId: string) {
+    const job = this.jobs.get(jobId);
+    if (
+      !job ||
+      job.projectId !== project.id ||
+      job.sourceJobId !== sourceId ||
+      job.status !== "finished" ||
+      !job.apkUrl
+    )
+      throw new Error(
+        "Önce bu çıktının APK derlemesi başarıyla tamamlanmalıdır.",
+      );
+    this.resolveSource(project, sourceId);
+    if (
+      !job.sourceFingerprint ||
+      job.sourceFingerprint !== (await sourceFingerprint(await this.cwd(job)))
+    )
+      throw new Error(
+        "APK kaynak sürümü değişmiş veya doğrulanamıyor; bu çıktı tamamlandı işaretlenemez.",
+      );
+    job.deviceTest = "passed";
+    job.completedAt = new Date().toISOString();
+    await this.persist(job);
+    return job;
   }
   async start(input: unknown) {
     const req = easRequestSchema.parse(input);
@@ -408,6 +434,7 @@ export class EasManager {
       await this.verify(cwd);
       await this.approve(project, job.sourceJobId);
       await this.prepare(job, cwd);
+      job.sourceFingerprint = await sourceFingerprint(cwd);
       job.status = "submitting";
       await this.persist(job);
       const result = await this.command(

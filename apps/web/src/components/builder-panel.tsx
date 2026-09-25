@@ -38,6 +38,10 @@ export function BuilderPanel({
   const [enabled, setEnabled] = useState(false);
   const [loaded, setLoaded] = useState(false);
   const [sending, setSending] = useState(false);
+  const [retryModel, setRetryModel] = useState("gpt-6-luna");
+  const [confirmation, setConfirmation] = useState("");
+  const failedTask = job?.tasks.find((task) => task.status !== "ready");
+  const confirmationKey = `${job?.id}:${failedTask?.attempts}:${retryModel}`;
   const [error, setError] = useState("");
   const { syncImageCost, syncBuilder } = useProjects();
   const revision = getSpecification(project).revision;
@@ -93,6 +97,16 @@ export function BuilderPanel({
         body: JSON.stringify({
           project: { ...project, revisions: [] },
           retry: job?.status === "failed",
+          ...(job?.status === "failed"
+            ? {
+                approval: {
+                  confirmed: confirmation === confirmationKey,
+                  model: retryModel,
+                  jobId: job.id,
+                  expectedAttempts: failedTask?.attempts,
+                },
+              }
+            : {}),
         }),
       });
       const data = await response.json();
@@ -105,9 +119,7 @@ export function BuilderPanel({
     }
   }
   const stale = job && !sameSpecification(project, job.project);
-  const exhausted =
-    job?.tasks.some((t) => t.status !== "ready" && t.attempts >= 3) ||
-    (job && !job.installed && job.setupAttempts >= 3);
+  const exhausted = job && !job.installed && job.setupAttempts >= 3;
   const busy = job?.status === "running";
   return (
     <div className="space-y-5">
@@ -138,8 +150,10 @@ export function BuilderPanel({
           <CardContent className="space-y-4">
             <p className="text-sm text-muted-foreground">
               Ortak işlevler ve her ekran için görev başına en fazla $0.24; her
-              denemede $0.08 bütçe ayrılır. Hatalı görevlerde otomatik tekrar
-              yapılmaz; en fazla iki kez yeniden deneyebilirsiniz.
+              denemede $0.08 bütçe ayrılır. İlk başarısızlıktan sonra en fazla
+              iki otomatik tekrar yapılır. Sonrasında model seçip bir ek
+              denemeyi onaylayabilirsiniz. Bütçe sınırına ulaşılırsa işlem
+              durur.
             </p>
             <p className="text-sm text-muted-foreground">
               Yerel özellikler ve desteklenen servis bağlantıları fikrinize göre
@@ -167,9 +181,47 @@ export function BuilderPanel({
                 Worker .env dosyasında OPENAI_API_KEY gerekli.
               </p>
             )}
+            {job?.status === "failed" && (
+              <div className="space-y-3 rounded-md border p-3">
+                <p className="text-sm">
+                  İşlem durdu. Hangi AI modeliyle yeniden denensin?
+                </p>
+                <label className="block text-sm">
+                  AI modeli
+                  <select
+                    value={retryModel}
+                    onChange={(e) => {
+                      setRetryModel(e.target.value);
+                      setConfirmation("");
+                    }}
+                    className="ml-2 rounded border p-2"
+                  >
+                    <option value="gpt-6-luna">GPT-6 Luna</option>
+                    <option value="gpt-4.1-mini">GPT-4.1 mini</option>
+                  </select>
+                </label>
+                <p className="text-xs text-muted-foreground">
+                  Seçilen model yalnızca başarısız görev için kullanılır.
+                  Harcanan maliyet korunur; bir ek deneme için $0.08 ayrılır.
+                  Görev sınırı $0.24.
+                </p>
+                <label className="flex gap-2 text-sm">
+                  <input
+                    type="checkbox"
+                    checked={confirmation === confirmationKey}
+                    onChange={(e) =>
+                      setConfirmation(e.target.checked ? confirmationKey : "")
+                    }
+                  />
+                  Seçtiğim modelle bir ücretli denemeyi onaylıyorum.
+                </label>
+              </div>
+            )}
             <Button
               disabled={
                 !loaded ||
+                (job?.status === "failed" &&
+                  confirmation !== confirmationKey) ||
                 !enabled ||
                 sending ||
                 busy ||
@@ -302,7 +354,8 @@ export function BuilderPanel({
                 <Badge variant="secondary">{labels[task.status]}</Badge>
               </div>
               <CardDescription>
-                Deneme {task.attempts}/3 · ${task.costUsd.toFixed(6)}
+                Deneme {task.attempts} · {task.model ?? "gpt-6-luna"} · $
+                {task.costUsd.toFixed(6)}
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-3">

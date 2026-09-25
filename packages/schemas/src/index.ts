@@ -591,12 +591,21 @@ export function builderJsonSchema() {
   delete schema.$schema;
   return schema;
 }
+export const builderModelSchema = z.enum(["gpt-6-luna", "gpt-4.1-mini"]);
+export const builderRetryApprovalSchema = z.object({
+  confirmed: z.literal(true),
+  model: builderModelSchema,
+  jobId: z.uuid(),
+  expectedAttempts: z.number().int().nonnegative(),
+});
 export const builderTaskSchema = z.object({
   kind: z.enum(["features", "screen"]).optional(),
   screenId: screenIdSchema,
   name: z.string(),
   status: z.enum(["pending", "running", "ready", "failed"]),
-  attempts: z.number().int().min(0).max(3),
+  attempts: z.number().int().nonnegative(),
+  attemptLimit: z.number().int().min(3).optional(),
+  model: builderModelSchema.optional(),
   costUsd: z.number().nonnegative(),
   reservedUsd: z.number().nonnegative(),
   uncertainCostUsd: z.number().nonnegative(),
@@ -675,10 +684,40 @@ export const easJobSchema = z.object({
   log: z.string(),
   createdAt: z.iso.datetime(),
   updatedAt: z.iso.datetime(),
-  deviceTest: z.literal("not_tested"),
+  deviceTest: z.enum(["not_tested", "passed"]),
+  completedAt: z.iso.datetime().optional(),
+  sourceFingerprint: z.string().optional(),
 });
 export type EasJob = z.infer<typeof easJobSchema>;
+export const releaseChecklistSchema = z.object({
+  fingerprint: z.string(),
+  items: z.array(
+    z.object({ id: z.string(), label: z.string(), checked: z.boolean() }),
+  ),
+  ready: z.boolean(),
+});
+export type ReleaseChecklist = z.infer<typeof releaseChecklistSchema>;
 export const easRequestSchema = z.discriminatedUnion("action", [
+  z.object({
+    action: z.literal("checklist"),
+    project: projectSchema,
+    sourceJobId: z.uuid(),
+  }),
+  z.object({
+    action: z.literal("check-item"),
+    project: projectSchema,
+    sourceJobId: z.uuid(),
+    fingerprint: z.string(),
+    itemId: z.string(),
+    checked: z.boolean(),
+  }),
+  z.object({
+    action: z.literal("complete"),
+    project: projectSchema,
+    sourceJobId: z.uuid(),
+    jobId: z.uuid(),
+    confirmed: z.literal(true),
+  }),
   z.object({
     action: z.literal("start"),
     project: projectSchema.safeExtend({ id: projectIdSchema }),

@@ -1,3 +1,4 @@
+import { isDemoMode } from "../demo-state";
 import "react-native-url-polyfill/auto";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { AppState, Platform } from "react-native";
@@ -13,6 +14,8 @@ export const backendConfigured = Boolean(
   connection.url && connection.publishableKey,
 );
 export function getBackend(): SupabaseClient {
+  if (isDemoMode())
+    throw new Error("Demo modunda gerçek backend bağlantısı kapalı.");
   if (!backendConfigured)
     throw new Error(
       "Bu özellik için uygulamanın Supabase bağlantısı kurulmalıdır.",
@@ -46,6 +49,7 @@ export async function readLocal<T>(
   validate: (value: unknown) => value is T,
   initial: T,
 ): Promise<T> {
+  if (isDemoMode()) return initial;
   const raw = await AsyncStorage.getItem(`features:${key}`);
   if (raw === null) return initial;
   const value: unknown = JSON.parse(raw);
@@ -54,6 +58,7 @@ export async function readLocal<T>(
   return value;
 }
 export async function writeLocal<T>(key: string, value: T): Promise<void> {
+  if (isDemoMode()) return;
   await AsyncStorage.setItem(`features:${key}`, JSON.stringify(value));
 }
 export async function currentLocation(): Promise<Coordinates> {

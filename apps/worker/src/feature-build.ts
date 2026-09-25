@@ -16,6 +16,49 @@ import {
   type FeatureOutput,
 } from "@app-factory/schemas";
 
+// Resumed jobs may have been generated before demo support was introduced.
+// Add missing support without replacing existing application modules.
+export async function ensureDemoSupport(root: string, cwd: string) {
+  await assertRealDirectory(cwd);
+  await assertRealDirectory(path.join(cwd, "src"));
+  await assertRealDirectory(path.join(cwd, "app"));
+  for (const name of ["demo.tsx", "demo-state.ts"]) {
+    const target = path.join(cwd, "src", name);
+    try {
+      const info = await lstat(target);
+      if (!info.isFile() || (await realpath(target)) !== target)
+        throw new Error("Demo modül yolu geçersiz.");
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error;
+      await writeFile(
+        target,
+        await readFile(path.join(root, "templates/expo-base/src", name)),
+        { flag: "wx" },
+      );
+    }
+  }
+  const target = path.join(cwd, "app/_layout.tsx");
+  if (!(await lstat(target)).isFile() || (await realpath(target)) !== target)
+    throw new Error("Uygulama layout yolu geçersiz.");
+  const original = await readFile(target, "utf8");
+  if (original.includes("<DemoProvider>")) return;
+  const provider = original.includes("<AppProvider>")
+    ? "AppProvider"
+    : "RecordsProvider";
+  if (
+    !original.includes(`<${provider}>`) ||
+    !original.includes(`</${provider}>`)
+  )
+    throw new Error("Demo modu için uygulama sağlayıcısı bulunamadı.");
+  await writeFile(
+    target,
+    'import { DemoProvider } from "../src/demo";\n' +
+      original
+        .replace(`<${provider}>`, `<DemoProvider><${provider}>`)
+        .replace(`</${provider}>`, `</${provider}></DemoProvider>`),
+  );
+}
+
 export async function prepareApplication(root: string, cwd: string) {
   await assertRealDirectory(cwd);
   await mkdir(path.join(cwd, "src/runtime"), { recursive: true });
@@ -93,6 +136,10 @@ export async function featureContext(
       path.join(cwd, "src/runtime", name),
       "utf8",
     );
+  modules["src/demo.tsx"] = await readFile(
+    path.join(cwd, "src/demo.tsx"),
+    "utf8",
+  );
   const spec = getSpecification(project);
   return JSON.stringify({
     task: "BUILD_APPLICATION_FEATURES",
@@ -118,6 +165,7 @@ export async function featureContext(
 export async function applicationModules(cwd: string) {
   const files: Record<string, string> = {};
   for (const file of [
+    "demo.tsx",
     "features/models.ts",
     "features/domain.ts",
     "features/store.tsx",
@@ -126,6 +174,8 @@ export async function applicationModules(cwd: string) {
     "runtime/map.tsx",
   ]) {
     const target = path.join(cwd, "src", file);
+    if (file === "demo.tsx" && !(await lstat(target).catch(() => null)))
+      continue;
     if (!(await lstat(target)).isFile() || (await realpath(target)) !== target)
       throw new Error("Uygulama modül yolu geçersiz.");
     files[`src/${file}`] = await readFile(target, "utf8");

@@ -1,3 +1,5 @@
+import { useDemo } from "./demo";
+import project from "./project.json";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import {
   createContext,
@@ -36,13 +38,28 @@ function isRecords(value: unknown): value is RecordItem[] {
   );
 }
 export function RecordsProvider({ children }: { children: ReactNode }) {
+  const demo = useDemo();
   const [records, setRecords] = useState<RecordItem[]>([]);
   const [ready, setReady] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const current = useRef<RecordItem[]>([]);
   useEffect(() => {
     let active = true;
-    void AsyncStorage.getItem(key)
+    const initial = demo.seed
+      ? [
+          {
+            id: "demo-1",
+            title: `${project.name} · Demo kayıt`,
+            notes: project.idea,
+            createdAt: "2026-01-01T12:00:00.000Z",
+          },
+        ]
+      : [];
+    void (
+      demo.enabled
+        ? Promise.resolve(JSON.stringify(initial))
+        : AsyncStorage.getItem(key)
+    )
       .then((raw) => {
         const parsed: unknown = raw ? JSON.parse(raw) : [];
         if (!isRecords(parsed)) throw new Error("Veri biçimi geçersiz.");
@@ -61,10 +78,10 @@ export function RecordsProvider({ children }: { children: ReactNode }) {
     return () => {
       active = false;
     };
-  }, []);
+  }, [demo.enabled, demo.seed]);
   const persist = async (next: RecordItem[]) => {
     try {
-      await AsyncStorage.setItem(key, JSON.stringify(next));
+      if (!demo.enabled) await AsyncStorage.setItem(key, JSON.stringify(next));
       current.current = next;
       setRecords(next);
       setError(null);

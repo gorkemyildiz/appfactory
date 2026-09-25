@@ -7,11 +7,22 @@ import {
   builderOutputSchema,
   featureJsonSchema,
   featureOutputSchema,
+  builderModelSchema,
 } from "@app-factory/schemas";
-import { model, prices, PlannerError } from "./index";
+import { PlannerError } from "./index";
+export const builderModel = "gpt-6-luna";
+// Standard USD / 1M tokens. Verified 2026-09-25; cached input billed conservatively.
+const modelPrices = {
+  "gpt-6-luna": { input: 0.1, output: 0.5 },
+  "gpt-4.1-mini": { input: 0.4, output: 1.6 },
+};
 export const builderReservationUsd = 0.08;
 export const builderTaskLimitUsd = 0.24;
-export type BuilderInput = { context: string; image?: Buffer };
+export type BuilderInput = {
+  context: string;
+  image?: Buffer;
+  model?: keyof typeof modelPrices;
+};
 async function requestBuilder<T>(
   input: BuilderInput,
   key: string,
@@ -21,6 +32,8 @@ async function requestBuilder<T>(
   instructions: string,
   maxTokens: number,
 ) {
+  const model = builderModelSchema.parse(input.model ?? builderModel);
+  const prices = modelPrices[model];
   if (
     Buffer.byteLength(input.context) > 80000 ||
     (input.image?.length ?? 0) > 20000000
@@ -37,6 +50,8 @@ async function requestBuilder<T>(
       signal: AbortSignal.timeout(180000),
       body: JSON.stringify({
         model,
+        ...(model === "gpt-6-luna" ? { reasoning: { effort: "medium" } } : {}),
+        service_tier: "default",
         store: false,
         max_output_tokens: maxTokens,
         instructions,
@@ -130,7 +145,8 @@ export async function runBuilder(
   key: string,
   transport: typeof fetch = fetch,
 ) {
-  if (Buffer.byteLength(input.context) > 80000) throw new PlannerError("Builder görev bağlamı çok büyük.", 0);
+  if (Buffer.byteLength(input.context) > 80000)
+    throw new PlannerError("Builder görev bağlamı çok büyük.", 0);
   const context = JSON.parse(input.context) as { applicationMode?: boolean };
   return requestBuilder(
     input,

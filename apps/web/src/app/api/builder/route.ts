@@ -88,7 +88,11 @@ export async function POST(request: Request) {
     const project = projectSchema
       .safeExtend({ id: projectIdSchema })
       .parse(body.project);
-    return proxy(request, { project, retry: body.retry === true });
+    return proxy(request, {
+      project,
+      retry: body.retry === true,
+      approval: body.approval,
+    });
   } catch {
     return Response.json(
       { error: "Proje bilgileri geçersiz." },

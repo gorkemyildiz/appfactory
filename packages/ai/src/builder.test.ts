@@ -3,10 +3,33 @@ import assert from "node:assert/strict";
 import { runBuilder } from "./builder";
 import { PlannerError } from "./index";
 const input = { context: '{"task":"BUILD_SCREEN"}', image: Buffer.from("png") };
+test("manual model selection sets compatible request options and model-specific cost", async () => {
+  await assert.rejects(
+    runBuilder(
+      { ...input, model: "gpt-4.1-mini" },
+      "test",
+      async (_url, init) => {
+        const body = JSON.parse(String(init?.body));
+        assert.equal(body.model, "gpt-4.1-mini");
+        assert.equal(body.reasoning, undefined);
+        return Response.json({
+          status: "completed",
+          usage: { input_tokens: 1000, output_tokens: 1000 },
+          output: [],
+        });
+      },
+    ),
+    (error: unknown) =>
+      error instanceof PlannerError && error.costUsd === 0.002,
+  );
+});
 test("Builder sends one image and bounded task context, validates output and accounts usage", async () => {
   const result = await runBuilder(input, "test", async (_url, init) => {
     const body = JSON.parse(String(init?.body));
     assert.equal(body.store, false);
+    assert.equal(body.model, "gpt-6-luna");
+    assert.equal(body.reasoning.effort, "medium");
+    assert.equal(body.service_tier, "default");
     assert.equal(body.input[0].content[1].type, "input_image");
     assert.equal(body.input[0].content[0].text, input.context);
     return Response.json({
@@ -29,7 +52,7 @@ test("Builder sends one image and bounded task context, validates output and acc
       ],
     });
   });
-  assert.equal(result.costUsd, 0.002);
+  assert.equal(result.costUsd, 0.0006);
   await assert.rejects(
     runBuilder({ ...input, context: "a".repeat(80001) }, "test"),
     (e: unknown) => e instanceof PlannerError && e.costUsd === 0,
@@ -42,7 +65,7 @@ test("Builder sends one image and bounded task context, validates output and acc
         output: [],
       }),
     ),
-    (e: unknown) => e instanceof PlannerError && e.costUsd === 0.002,
+    (e: unknown) => e instanceof PlannerError && e.costUsd === 0.0006,
   );
 });
 

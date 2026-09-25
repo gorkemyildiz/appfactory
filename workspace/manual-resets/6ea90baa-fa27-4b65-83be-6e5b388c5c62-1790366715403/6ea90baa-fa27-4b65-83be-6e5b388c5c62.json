@@ -1,0 +1,342 @@
+{
+  "applicationPrepared": true,
+  "mode": "application",
+  "id": "6ea90baa-fa27-4b65-83be-6e5b388c5c62",
+  "project": {
+    "name": "ParkSpot",
+    "type": "mobile",
+    "android": true,
+    "ios": true,
+    "idea": "Canlı harita üzerinden park yeri paylaşımı sağlayan bir uygulama olacak. Kullanıcılar park yerini işaretleyip fotoğraf ile doğrulayacak. İşaretlenen park yeri 7 dakika aktif kalacak. İlk 3 dakika yeşil, 3-5 dakika arası sarı, 5-7 dakika arası kırmızı ile gösterilecek. Başka bir kullanıcı uygulamayı açtığında bulunduğu konuma 100 metre çapı olan bir daire içerisinde işaretlenmiş park yerlerini görecek. Park yeri dolu ise başka kullanıcılar dolu olduğunu bildirebilecek. Dolu olduğu teyit edildiğinde harita üzerindeki işaret kalkacak. Bir kullanıcı boş park yerini başarılı bir şekilde kullanırsa işaretleyen kullanıcı uygulama içi puan kazanacak. Bu puanla da park etme hakkı kullanacak. Her gün haklar sıfırlanacak ve ücretsiz 1 kullanım hakkı kazanacak. Park yeri arama hakkı bitenler video izleyerek hak kazabilecek. Bu sayede admob geliri elde etmeyi planlıyoruz. Burada kullanılack olan map servisleri vb bunları ücretsiz servislerden kullanmaya çalış.",
+    "budgetLimit": 10,
+    "id": "1773c2cc-e8b5-4a27-9c0a-9294f8133285",
+    "stage": "build",
+    "aiCost": 0.27016000000000007,
+    "updatedAt": "2026-09-25T14:57:58.480Z",
+    "specification": {
+      "revision": 6,
+      "plan": {
+        "summary": "ParkSpot uygulaması, kullanıcıların canlı harita üzerinde park yeri paylaşımı yapmasını sağlar. Kullanıcılar park yerini işaretleyip fotoğraf ile doğrular, işaretler 7 dakika aktif kalır ve renk kodlarıyla doluluk durumu belirtilir. Başka kullanıcılar 100 metre yarıçapındaki işaretleri görebilir, dolu yerleri bildirebilir ve doğrulanmış dolu işaretler kaldırılır. Kullanıcılar günlük ücretsiz park etme hakları vardır. Haklar video izleyerek artırılabilir.",
+        "scope": [
+          "Park yeri işaretleme ve fotoğraf doğrulama",
+          "Canlı harita üzerinde 100 metre çapındaki işaretlerin gösterimi",
+          "İşaretlerin renk kodları ile doluluk süresi gösterimi",
+          "Park yeri dolu bildirme ve doğrulama",
+          "Kullanıcı günlük hak yönetimi",
+          "Video izleyerek hak kazanma mekanizması (prototip)"
+        ],
+        "outOfScope": "Harici reklam servisi entegrasyonu ve detaylı kullanıcı kimlik doğrulama. Gelişmiş ödeme işlemleri ve harici harita servislerinin özel kullanımı."
+      },
+      "screens": [
+        {
+          "id": "home",
+          "enabled": true,
+          "name": "Ana Sayfa",
+          "description": "Kullanıcının bulunduğu konuma göre çevredeki park yerlerini gösteren canlı harita ekranı."
+        },
+        {
+          "id": "create",
+          "enabled": true,
+          "name": "Park Yeri Bildirimi",
+          "description": "Kullanıcıların park yerini fotoğraf ile doğrulayarak işaretlediği ekran."
+        },
+        {
+          "id": "details",
+          "enabled": true,
+          "name": "Park Yeri Detayları",
+          "description": "Seçilmiş park yerinin detaylarının görüntülendiği ve dolu bildiriminin yapılabildiği ekran."
+        },
+        {
+          "id": "settings",
+          "enabled": true,
+          "name": "Ayarlar",
+          "description": "Uygulama ve kullanıcı verileri hakkında bilgi ve yönetim seçenekleri."
+        },
+        {
+          "id": "register",
+          "enabled": true,
+          "name": "Kayıt",
+          "description": "eposta veya telefon numarası, ad soyad, şifre"
+        }
+      ],
+      "design": {
+        "background": "#FFFFFF",
+        "text": "#333333",
+        "primary": "#2E8B57",
+        "radius": 12,
+        "spacing": 16
+      }
+    },
+    "designReview": {
+      "images": [
+        {
+          "screenId": "home",
+          "assetId": "b96ccd8e-572d-4c08-9c32-d6a05eab02ed",
+          "sourceRevision": 5
+        },
+        {
+          "screenId": "create",
+          "assetId": "61d5f825-c389-4809-9f6a-d2ca63cc5778",
+          "sourceRevision": 5
+        },
+        {
+          "screenId": "details",
+          "assetId": "9205a45e-80d7-4432-aebe-043875a67708",
+          "sourceRevision": 5
+        },
+        {
+          "screenId": "settings",
+          "assetId": "3ca66999-09e1-4def-9821-3173cc0921f5",
+          "sourceRevision": 5
+        },
+        {
+          "screenId": "register",
+          "assetId": "2e4bd05b-58bc-4a53-83a3-7106522fd422",
+          "sourceRevision": 5
+        }
+      ],
+      "revision": 6,
+      "screens": [
+        "home",
+        "create",
+        "details",
+        "settings",
+        "register"
+      ],
+      "reviewedAt": "2026-09-25T14:17:34.191Z"
+    },
+    "plannerJobId": "cacb5df9-fea9-4635-bf35-9d603436f798",
+    "plannerDraft": {
+      "plan": {
+        "summary": "ParkSpot uygulaması, kullanıcıların canlı harita üzerinde park yeri paylaşımı yapmasını sağlar. Kullanıcılar park yerini işaretleyip fotoğraf ile doğrular, işaretler 7 dakika aktif kalır ve renk kodlarıyla doluluk durumu belirtilir. Başka kullanıcılar 100 metre yarıçapındaki işaretleri görebilir, dolu yerleri bildirebilir ve doğrulanmış dolu işaretler kaldırılır. Kullanıcılar puan kazanır ve günlük ücretsiz park etme hakları vardır. Haklar video izleyerek artırılabilir.",
+        "scope": [
+          "Park yeri işaretleme ve fotoğraf doğrulama",
+          "Canlı harita üzerinde 100 metre çapındaki işaretlerin gösterimi",
+          "İşaretlerin renk kodları ile doluluk süresi gösterimi",
+          "Park yeri dolu bildirme ve doğrulama",
+          "Kullanıcı puanlama sistemi ve günlük hak yönetimi",
+          "Video izleyerek hak kazanma mekanizması (prototip)"
+        ],
+        "outOfScope": "Harici reklam servisi entegrasyonu ve detaylı kullanıcı kimlik doğrulama. Gelişmiş ödeme işlemleri ve harici harita servislerinin özel kullanımı."
+      },
+      "screens": [
+        {
+          "id": "home",
+          "enabled": true,
+          "name": "Ana Sayfa",
+          "description": "Kullanıcının bulunduğu konuma göre çevredeki park yerlerini gösteren canlı harita ekranı."
+        },
+        {
+          "id": "create",
+          "enabled": true,
+          "name": "Park Yeri Bildirimi",
+          "description": "Kullanıcıların park yerini fotoğraf ile doğrulayarak işaretlediği ekran."
+        },
+        {
+          "id": "details",
+          "enabled": true,
+          "name": "Park Yeri Detayları",
+          "description": "Seçilmiş park yerinin detaylarının görüntülendiği ve dolu bildiriminin yapılabildiği ekran."
+        },
+        {
+          "id": "settings",
+          "enabled": true,
+          "name": "Ayarlar",
+          "description": "Uygulama ve kullanıcı verileri hakkında bilgi ve yönetim seçenekleri."
+        },
+        {
+          "id": "register",
+          "enabled": false,
+          "name": "Kayıt",
+          "description": "(Opsiyonel) Kullanıcı adı ve e-posta prototip ekranı."
+        }
+      ],
+      "design": {
+        "background": "#FFFFFF",
+        "text": "#333333",
+        "primary": "#2E8B57",
+        "radius": 12,
+        "spacing": 16
+      },
+      "screenNotes": [
+        {
+          "screenId": "home",
+          "fields": [
+            "Harita görünümü",
+            "Park yeri işaretleri (renk kodlu)"
+          ],
+          "actions": [
+            "Harita konum güncelleme",
+            "Park yeri işaretine dokunarak detay açma"
+          ]
+        },
+        {
+          "screenId": "create",
+          "fields": [
+            "Fotoğraf yükleme alanı",
+            "Park yeri açıklaması"
+          ],
+          "actions": [
+            "Park yeri işaretleme",
+            "Fotoğraf ile doğrulama",
+            "İşaret süresini başlatma"
+          ]
+        },
+        {
+          "screenId": "details",
+          "fields": [
+            "Park yeri resmi ve açıklaması",
+            "Durum göstergesi (yeşil/sarı/kırmızı)",
+            "Dolu bildirimi butonu"
+          ],
+          "actions": [
+            "Dolu bildirimi gönderme",
+            "Detayları güncelleme"
+          ]
+        },
+        {
+          "screenId": "settings",
+          "fields": [
+            "Kullanıcı puan durumu",
+            "Günlük kullanım hakları",
+            "Video izleme hakkı bilgisi"
+          ],
+          "actions": [
+            "Video izleyerek hak kazanma (prototip)"
+          ]
+        }
+      ],
+      "tasks": [
+        {
+          "title": "Park yeri işaretleme ve doğrulama",
+          "description": "Kullanıcılar park yerini işaretleyip fotoğraf yükler. İşaret 7 dakika aktif kalır ve renk kodlarıyla süreyi gösterir.",
+          "acceptance": [
+            "Fotoğraf doğrulaması yapıldığında işaret oluşturulmalı",
+            "İşaret 7 dakika sonunda otomatik silinmeli",
+            "Renk değişimleri süreye göre doğru olmalı"
+          ]
+        },
+        {
+          "title": "Yakındaki park yerlerinin gösterimi",
+          "description": "Kullanıcılar harita açıldığında 100 metre yarıçapındaki aktif işaretleri görmeli.",
+          "acceptance": [
+            "Kullanıcının anlık konumu alınmalı",
+            "Harita üzerinde doğru işaretler gösterilmeli"
+          ]
+        },
+        {
+          "title": "Dolu park yeri bildirimi",
+          "description": "Başka kullanıcılar park yerinin dolu olduğunu bildirebilmeli ve doğrulanınca işaret kaldırılmalı.",
+          "acceptance": [
+            "Dolu bildirimi gönderilebilmeli",
+            "Dolu olması doğrulanan işaretler haritadan kalkmalı"
+          ]
+        },
+        {
+          "title": "Puan ve kullanım hakkı yönetimi",
+          "description": "Park yeri başarılı kullanımı sonrası puan verilmesi, günlük hakların sıfırlanması ve ücretsiz hakların atanması.",
+          "acceptance": [
+            "Başarılı kullanım sonrası puan artmalı",
+            "Her gün haklar sıfırlanmalı ve 1 ücretsiz hak eklenmeli"
+          ]
+        },
+        {
+          "title": "Video izleyerek hak kazanma prototipi",
+          "description": "Hakları biten kullanıcılar video izleyerek ek hak kazanabilmeli.",
+          "acceptance": [
+            "Video izleme ekranı mevcut olmalı",
+            "Video sonrası hak ekleme işlemi yapılmalı"
+          ]
+        }
+      ],
+      "limitations": [
+        "Gerçek kimlik doğrulama ve kullanıcı yönetimi kapsam dışı.",
+        "Ücretsiz harita ve servisler tercihe göre değişebilir ve performans kısıtlamaları olabilir.",
+        "Videolar için gerçek reklam servisi entegrasyonu yapılmayacak, prototip niteliğinde olacaktır."
+      ]
+    },
+    "revisions": []
+  },
+  "status": "failed",
+  "outputPath": "workspace\\generated-projects\\1773c2cc-e8b5-4a27-9c0a-9294f8133285\\6ea90baa-fa27-4b65-83be-6e5b388c5c62",
+  "setupAttempts": 1,
+  "installed": true,
+  "tasks": [
+    {
+      "kind": "features",
+      "screenId": "home",
+      "name": "Veri modeli ve uygulama işlevleri",
+      "status": "failed",
+      "attempts": 3,
+      "costUsd": 0.027898,
+      "reservedUsd": 0,
+      "uncertainCostUsd": 0,
+      "summary": "",
+      "limitations": [],
+      "log": "İş kuralı: Spot color transitions at exact elapsed-time boundaries · Başarılı\nİş kuralı: Expired spot has no remaining time · Başarılı\nİş kuralı: Nearby spots exclude expiry-time records · Başarılı\nİş kuralı: Nearby search includes a spot inside the 100m radius · Başarılı\nTypeScript: Başarısız\n\u001b[96msrc/features/services.ts\u001b[0m:\u001b[93m29\u001b[0m:\u001b[93m19\u001b[0m - \u001b[91merror\u001b[0m\u001b[90m TS2339: \u001b[0mProperty 'error' does not exist on type '{ data: { subscription: Subscription; }; }'.\r\n\r\n\u001b[7m29\u001b[0m     const { data, error } = requireBackend().auth.onAuthStateChange((_event, session) => callback(session?.user ? { userId: session.user.id, email: session.user.email ?? null } : null));\r\n\u001b[7m  \u001b[0m \u001b[91m                  ~~~~~\u001b[0m\r\n\r\n\r\nFound 1 error in src/features/services.ts\u001b[90m:29\u001b[0m\r\n\r\n\n\nUygulama işlevleri TypeScript kontrolünü geçemedi. Dosyalar geri alındı.\nSunucu gereksinimleri kurulum bekliyor olarak raporlanmalı."
+    },
+    {
+      "screenId": "home",
+      "name": "Ana Sayfa",
+      "status": "pending",
+      "attempts": 0,
+      "costUsd": 0,
+      "reservedUsd": 0,
+      "uncertainCostUsd": 0,
+      "summary": "",
+      "limitations": [],
+      "log": ""
+    },
+    {
+      "screenId": "create",
+      "name": "Park Yeri Bildirimi",
+      "status": "pending",
+      "attempts": 0,
+      "costUsd": 0,
+      "reservedUsd": 0,
+      "uncertainCostUsd": 0,
+      "summary": "",
+      "limitations": [],
+      "log": ""
+    },
+    {
+      "screenId": "details",
+      "name": "Park Yeri Detayları",
+      "status": "pending",
+      "attempts": 0,
+      "costUsd": 0,
+      "reservedUsd": 0,
+      "uncertainCostUsd": 0,
+      "summary": "",
+      "limitations": [],
+      "log": ""
+    },
+    {
+      "screenId": "settings",
+      "name": "Ayarlar",
+      "status": "pending",
+      "attempts": 0,
+      "costUsd": 0,
+      "reservedUsd": 0,
+      "uncertainCostUsd": 0,
+      "summary": "",
+      "limitations": [],
+      "log": ""
+    },
+    {
+      "screenId": "register",
+      "name": "Kayıt",
+      "status": "pending",
+      "attempts": 0,
+      "costUsd": 0,
+      "reservedUsd": 0,
+      "uncertainCostUsd": 0,
+      "summary": "",
+      "limitations": [],
+      "log": ""
+    }
+  ],
+  "error": "Sunucu gereksinimleri kurulum bekliyor olarak raporlanmalı.",
+  "setupLog": "npm warn deprecated uuid@7.0.3: uuid@10 and below is no longer supported.  For ESM codebases, update to uuid@latest.  For CommonJS codebases, use uuid@11 (but be aware this version will likely be deprecated in 2028).\nnpm warn deprecated eslint@9.39.5: This version is no longer supported. Please see https://eslint.org/version-support for other options.\n\nadded 822 packages in 3m\n",
+  "createdAt": "2026-09-25T19:38:29.595Z"
+}
