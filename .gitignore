@@ -24,3 +24,7 @@ workspace/eas/
 workspace/tools/
 
 workspace/previews/
+
+workspace/github/
+workspace/release/
+workspace/manual-resets/

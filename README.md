@@ -167,3 +167,13 @@ Uygulama Builder görevleri ilk çağrıdan sonra en fazla iki otomatik tekrar y
 
 Manuel seçenekler GPT-6 Luna ve GPT-4.1 mini. Model isteğe aktarılır; GPT-4.1 mini için reasoning parametresi gönderilmez. Standard token fiyatları sırasıyla $0.10/$0.50 ve $0.40/$1.60 (1M giriş/çıkış); görev limiti $0.24 ve deneme rezervi $0.08 değişmedi. Manuel onay bütçe limitini aşmaz.
 Kaynaklar: https://developers.openai.com/api/docs/models/gpt-6-luna ve https://developers.openai.com/api/docs/models/gpt-4.1-mini (25 Eylül 2026).
+
+### Üretilen uygulamaların GitHub paylaşımı
+
+Builder çıktıları ve görev kayıtları private GitHub depolarına otomatik gönderilebilir; başka bilgisayarda indirilip yerel kontrollerden geçirilerek devam edilir. Kurulum, PAT izinleri, çakışma davranışı ve kapsam için [GitHub paylaşım rehberi](GITHUB-SYNC.md).
+
+### Veri modeli görevlerinde hedefli onarım
+
+Veri modeli ve uygulama işlevlerinin varsayılan modeli GPT-5 mini (medium reasoning); ekran üretimi GPT-6 Luna olarak kalır. Son reddedilen aday varsa yeniden deneme yalnızca gerekli feature dosyalarının değişikliklerini ister. Worker değişmeyen dosyaları, SQL'i, kabul testlerini ve kapsam kaydını koruyarak sonucu birleştirir; tüm iş kuralı/TypeScript/ESLint kontrolleri tekrar çalışır. Hata halinde aday yine geri alınır. Strict ve noUncheckedIndexedAccess kuralları modele açıkça aktarılır.
+
+Görev bağlamı 80 KB ile sınırlıdır. İlk üretim en fazla 16.000, hedefli onarım 10.000 çıkış token'ı ister (reasoning dahil). Görev limiti $0.24 ve deneme rezervi $0.08 değişmedi; belirsiz ücret sıfır kabul edilmez. GPT-5 mini Standard fiyatı 1M token başına $0.25 giriş / $2 çıkış: https://developers.openai.com/api/docs/models/gpt-5-mini (26 Eylül 2026). Eski görevlerin geçmiş model/maliyet kayıtları korunur; manuel onay ekranında GPT-5 mini seçilebilir. Model değişimi hatasız kod veya cihaz testi garantisi değildir.

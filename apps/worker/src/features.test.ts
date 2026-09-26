@@ -314,7 +314,15 @@ test("failed feature checks roll back every generated module and retry only the 
         exitCode: args.includes("--noEmit") ? 1 : 0,
       }),
       generateProject,
-      async () => ({ output, costUsd: 0.01 }),
+      async (input) => {
+        const context = JSON.parse(input.context);
+        if (context.task === "REPAIR_APPLICATION_FEATURES") {
+          assert.deepEqual(context.previousCandidate.files, output.files);
+          assert.equal(context.compilerOptions.noUncheckedIndexedAccess, true);
+          assert.match(context.previousDiagnostics, /TypeScript/);
+        }
+        return { output, costUsd: 0.01 };
+      },
     );
     await manager.initialize();
     const job = await manager.start(project);

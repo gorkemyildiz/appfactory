@@ -591,7 +591,11 @@ export function builderJsonSchema() {
   delete schema.$schema;
   return schema;
 }
-export const builderModelSchema = z.enum(["gpt-6-luna", "gpt-4.1-mini"]);
+export const builderModelSchema = z.enum([
+  "gpt-6-luna",
+  "gpt-4.1-mini",
+  "gpt-5-mini",
+]);
 export const builderRetryApprovalSchema = z.object({
   confirmed: z.literal(true),
   model: builderModelSchema,
@@ -829,6 +833,18 @@ export const featureOutputSchema = z.object({
 export type FeatureOutput = z.infer<typeof featureOutputSchema>;
 export function featureJsonSchema() {
   const schema = z.toJSONSchema(featureOutputSchema);
+  delete schema.$schema;
+  return schema;
+}
+
+export const featureRepairSchema = featureOutputSchema
+  .pick({ summary: true })
+  .extend({
+    files: z.array(featureOutputSchema.shape.files.element).min(1).max(4),
+  });
+
+export function featureRepairJsonSchema() {
+  const schema = z.toJSONSchema(featureRepairSchema);
   delete schema.$schema;
   return schema;
 }

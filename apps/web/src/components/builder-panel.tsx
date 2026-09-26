@@ -1,4 +1,6 @@
 "use client";
+import { GithubPanel } from "./github-panel";
+
 import Link from "next/link";
 import { OperationProgress, builderProgress } from "./operation-progress";
 import { RevisionPanel } from "./revision-panel";
@@ -38,7 +40,7 @@ export function BuilderPanel({
   const [enabled, setEnabled] = useState(false);
   const [loaded, setLoaded] = useState(false);
   const [sending, setSending] = useState(false);
-  const [retryModel, setRetryModel] = useState("gpt-6-luna");
+  const [retryModel, setRetryModel] = useState("gpt-5-mini");
   const [confirmation, setConfirmation] = useState("");
   const failedTask = job?.tasks.find((task) => task.status !== "ready");
   const confirmationKey = `${job?.id}:${failedTask?.attempts}:${retryModel}`;
@@ -132,6 +134,7 @@ export function BuilderPanel({
           }[section]
         }
       </h2>
+      <GithubPanel project={project} />
       <RevisionPanel
         section={section}
         project={project}
@@ -142,9 +145,10 @@ export function BuilderPanel({
           <CardHeader>
             <CardTitle>Plan ve tasarımdan çalışan uygulamaya</CardTitle>
             <CardDescription>
-              Önce veri modeli, iş kuralları, kayıt ve servis işlemleri
-              üretilir. Ekranlar bu ortak işlevlere bağlanır. İş kuralı
-              örnekleri, TypeScript ve ESLint sonuçları aşağıda gösterilir.
+              GPT-5 mini ile önce veri modeli, iş kuralları, kayıt ve servis
+              işlemleri üretilir. Ekranlar bu ortak işlevlere bağlanır. İş
+              kuralı örnekleri, TypeScript ve ESLint sonuçları aşağıda
+              gösterilir.
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
@@ -196,6 +200,9 @@ export function BuilderPanel({
                     }}
                     className="ml-2 rounded border p-2"
                   >
+                    <option value="gpt-5-mini">
+                      GPT-5 mini · İşlevler için önerilen
+                    </option>
                     <option value="gpt-6-luna">GPT-6 Luna</option>
                     <option value="gpt-4.1-mini">GPT-4.1 mini</option>
                   </select>
@@ -354,8 +361,10 @@ export function BuilderPanel({
                 <Badge variant="secondary">{labels[task.status]}</Badge>
               </div>
               <CardDescription>
-                Deneme {task.attempts} · {task.model ?? "gpt-6-luna"} · $
-                {task.costUsd.toFixed(6)}
+                Deneme {task.attempts} ·{" "}
+                {task.model ??
+                  (task.kind === "features" ? "gpt-5-mini" : "gpt-6-luna")}{" "}
+                · ${task.costUsd.toFixed(6)}
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-3">

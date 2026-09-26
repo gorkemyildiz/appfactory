@@ -1,3 +1,4 @@
+import { GithubSync } from "./github";
 import { ReleaseManager } from "./release";
 import { DesignAssetCloud } from "./design-cloud";
 import { EasManager } from "./eas";
@@ -64,6 +65,19 @@ const builder: BuilderManager = new BuilderManager(
   root,
   (id) => plannerSpend(id) + designImages.spent(id),
 );
+
+let github: GithubSync | null = null;
+let githubError: string | null = null;
+let githubPending = false;
+try {
+  github = await GithubSync.fromEnvironment(root);
+} catch {
+  githubError =
+    "GitHub bağlantısı kurulamadı. PAT ve GITHUB_OWNER ayarlarını kontrol edip worker'ı yeniden başlatın.";
+}
+builder.onSettled = async (job) => {
+  if (github) await github.publish(job);
+};
 
 const resolveSource = (project: Project, sourceId: string) => {
   const source = builder.jobs.get(sourceId) ?? jobs.jobs.get(project.id);
@@ -181,12 +195,100 @@ const server = createServer(async (request, response) => {
         send(415, { error: "JSON istek gerekli." });
         return;
       }
-      if (designImages.busy || planner.busy)
+      if (designImages.busy || planner.busy || github?.busy || githubPending)
         throw new Error("Başka bir AI görevi sürüyor.");
       send(202, {
         job: await builder.revise(await readBody(request), resolveSource),
       });
       return;
+    }
+    if (url.pathname === "/github" && request.method === "GET") {
+      const id = projectIdSchema.parse(url.searchParams.get("projectId"));
+      send(200, {
+        enabled: !!github,
+        busy: !!github?.busy || builder.busy || githubPending,
+        error: githubError,
+        ...github?.status.get(id),
+      });
+      return;
+    }
+    if (url.pathname === "/github" && request.method === "POST") {
+      if (!request.headers["content-type"]?.startsWith("application/json")) {
+        send(415, { error: "JSON istek gerekli." });
+        return;
+      }
+      if (!github) throw new Error(githubError ?? "GITHUB_TOKEN gerekli.");
+      if (
+        builder.busy ||
+        github.busy ||
+        githubPending ||
+        designImages.busy ||
+        planner.busy ||
+        [...jobs.jobs.values()].some((job) =>
+          ["queued", "generating", "validating"].includes(job.status),
+        ) ||
+        eas.busy
+      )
+        throw new Error("Başka bir işlem sürüyor.");
+      const body = await readBody(request),
+        project = projectSchema.parse(body.project);
+      if (body.action === "list") {
+        send(200, await github.list(project.id));
+        return;
+      }
+      if (body.action === "publish") {
+        const candidates = builder
+          .list(project.id)
+          .filter((job) => job.outputPath && job.status !== "running");
+        if (!candidates.length)
+          throw new Error("Bu bilgisayarda gönderilecek çıktı bulunamadı.");
+        const sync = github;
+        githubPending = true;
+        void (async () => {
+          for (const job of candidates) await sync.publish(job);
+        })()
+          .catch((error) =>
+            sync.status.set(project.id, {
+              error:
+                error instanceof Error
+                  ? error.message
+                  : "GitHub aktarımı başarısız.",
+            }),
+          )
+          .finally(() => {
+            githubPending = false;
+          });
+        send(202, { ok: true });
+        return;
+      }
+      if (body.action === "restore") {
+        const info = await preview.info(project.id);
+        if (info.session && ["starting", "ready"].includes(info.session.status))
+          throw new Error("Önce açık Expo önizlemesini durdurun.");
+        if (typeof body.id !== "string" || typeof body.sha !== "string")
+          throw new Error("Sürüm bilgisi geçersiz.");
+        const sync = github;
+        github.status.set(project.id, { error: null });
+        void builder
+          .importRemote(() => sync.restore(project, body.id, body.sha))
+          .then((job) => {
+            sync.status.set(project.id, {
+              error: job.status === "failed" ? job.error : null,
+              updatedAt: new Date().toISOString(),
+            });
+          })
+          .catch((error) => {
+            sync.status.set(project.id, {
+              error:
+                error instanceof Error
+                  ? error.message
+                  : "GitHub indirmesi başarısız.",
+            });
+          });
+        send(202, { ok: true });
+        return;
+      }
+      throw new Error("GitHub işlemi geçersiz.");
     }
     if (url.pathname === "/preview" && request.method === "GET") {
       send(

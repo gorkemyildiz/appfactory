@@ -129,6 +129,7 @@ export async function featureContext(
   cwd: string,
   project: Project,
   diagnostics: string,
+  previousCandidate?: FeatureOutput,
 ) {
   const modules: Record<string, string> = {};
   for (const name of ["runtime.ts", "map.tsx"])
@@ -142,14 +143,20 @@ export async function featureContext(
   );
   const spec = getSpecification(project);
   return JSON.stringify({
-    task: "BUILD_APPLICATION_FEATURES",
+    task: previousCandidate
+      ? "REPAIR_APPLICATION_FEATURES"
+      : "BUILD_APPLICATION_FEATURES",
+    previousCandidate,
+    compilerOptions: { strict: true, noUncheckedIndexedAccess: true },
     projectMemory: {
       name: project.name,
       idea: project.idea,
       plan: spec.plan,
       screens: getScreens(spec).filter((s) => s.enabled),
-      tasks: project.plannerDraft?.tasks,
-      screenNotes: project.plannerDraft?.screenNotes,
+      tasks: previousCandidate ? undefined : project.plannerDraft?.tasks,
+      screenNotes: previousCandidate
+        ? undefined
+        : project.plannerDraft?.screenNotes,
     },
     modules,
     files: [

@@ -13,6 +13,7 @@ import { randomUUID } from "node:crypto";
 import path from "node:path";
 import {
   builderJobSchema,
+  featureOutputSchema,
   builderRetryApprovalSchema,
   projectSchema,
   projectIdSchema,
@@ -59,6 +60,84 @@ import {
 } from "./feature-code";
 export class BuilderManager {
   readonly jobs = new Map<string, BuilderJob>();
+  onSettled?: (job: BuilderJob) => Promise<void>;
+  async importRemote(load: () => Promise<BuilderJob>) {
+    if (this.locked) throw new Error("Builder işi sürüyor.");
+    this.locked = true;
+    try {
+      const job = await load();
+      const cwd = path.resolve(this.root, job.outputPath);
+      if (
+        cwd !==
+        path.join(
+          this.root,
+          "workspace/generated-projects",
+          job.project.id,
+          job.id,
+        )
+      )
+        throw new Error("Çıktı yolu geçersiz.");
+      const expectedStatus = job.status;
+      job.status = "running";
+      this.jobs.set(job.id, job);
+      await this.persist(job);
+      try {
+        const install = await this.command(
+          "npm",
+          [
+            "install",
+            "--ignore-scripts",
+            "--no-audit",
+            "--no-fund",
+            "--fetch-retries=0",
+          ],
+          cwd,
+        );
+        job.setupLog = install.output;
+        if (install.exitCode !== 0)
+          throw new Error("Çıktı indirildi; bağımlılıklar kurulamadı.");
+        job.installed = true;
+        if (expectedStatus === "ready") {
+          for (const [label, args] of [
+            [
+              "TypeScript",
+              [path.join(cwd, "node_modules/typescript/bin/tsc"), "--noEmit"],
+            ],
+            [
+              "ESLint",
+              [
+                path.join(cwd, "node_modules/eslint/bin/eslint.js"),
+                ".",
+                "--max-warnings=0",
+              ],
+            ],
+          ] as const) {
+            const check = await this.command(
+              process.execPath,
+              [...args],
+              cwd,
+              120000,
+            );
+            if (check.exitCode !== 0)
+              throw new Error(
+                label + " kontrolü başarısız. İndirilen çıktı yerelde korundu.",
+              );
+          }
+        }
+        job.status = expectedStatus;
+      } catch (error) {
+        job.status = "failed";
+        job.error =
+          error instanceof Error ? error.message : "Kurulum başarısız.";
+        if (job.tasks.every((t) => t.status === "ready"))
+          job.tasks[job.tasks.length - 1]!.status = "failed";
+      }
+      await this.persist(job);
+      return job;
+    } finally {
+      this.locked = false;
+    }
+  }
   private locked = false;
   get busy() {
     return this.locked;
@@ -402,7 +481,33 @@ export class BuilderManager {
     cwd: string,
   ) {
     await ensureDemoSupport(this.root, cwd);
-    const context = await featureContext(cwd, job.project, task.log);
+    let previousCandidate;
+    if (task.attempts > 0) {
+      try {
+        const file = await this.checkedFile(
+          path.join(this.root, "workspace/builder"),
+          job.id + "-features-" + task.attempts + ".txt",
+        );
+        if ((await lstat(file)).size <= 200000) {
+          const parsed = featureOutputSchema.safeParse(
+            JSON.parse(await readFile(file, "utf8")),
+          );
+          if (parsed.success) previousCandidate = parsed.data;
+        }
+      } catch (error) {
+        if (
+          (error as NodeJS.ErrnoException).code !== "ENOENT" &&
+          !(error instanceof SyntaxError)
+        )
+          throw error;
+      }
+    }
+    const context = await featureContext(
+      cwd,
+      job.project,
+      task.log,
+      previousCandidate,
+    );
     if (Buffer.byteLength(context) > 80000)
       throw new Error("Uygulama bağlamı görev sınırını aşıyor.");
     task.status = "running";
@@ -773,7 +878,14 @@ export class BuilderManager {
         job.status = "failed";
         job.error = "Builder iş kaydı yazılamadı.";
       }
-      if (!nested) this.locked = false;
+      if (!nested) {
+        try {
+          if (job.outputPath) await this.onSettled?.(job);
+        } catch {
+          /* Sync status is reported separately. */
+        }
+        this.locked = false;
+      }
     }
   }
 }

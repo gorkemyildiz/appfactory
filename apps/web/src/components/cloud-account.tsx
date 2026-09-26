@@ -69,6 +69,27 @@ export function CloudAccount() {
               >
                 Buluttan yenile / yeniden dene
               </Button>
+              <Button
+                variant="default"
+                onClick={() => {
+                  try {
+                    const raw = localStorage.getItem("app-factory.projects.v1");
+                    setBackup(
+                      JSON.stringify(
+                        storedProjectsSchema.parse(
+                          JSON.parse(raw ?? '{"version":1,"projects":[]}'),
+                        ),
+                        null,
+                        2,
+                      ),
+                    );
+                  } catch {
+                    setMessage("Yerel proje yedeği okunamadı.");
+                  }
+                }}
+              >
+                Yerel projeleri dışa aktar
+              </Button>
             </div>
             {cloud.status === "error" && (
               <div className="space-y-2">
@@ -97,27 +118,6 @@ export function CloudAccount() {
             )}
           </>
         )}
-        <Button
-          variant="info"
-          onClick={() => {
-            try {
-              const raw = localStorage.getItem("app-factory.projects.v1");
-              setBackup(
-                JSON.stringify(
-                  storedProjectsSchema.parse(
-                    JSON.parse(raw ?? '{"version":1,"projects":[]}'),
-                  ),
-                  null,
-                  2,
-                ),
-              );
-            } catch {
-              setMessage("Yerel proje yedeği okunamadı.");
-            }
-          }}
-        >
-          Yerel projeleri dışa aktar
-        </Button>
         {backup !== null && (
           <div className="space-y-2">
             <Label htmlFor="local-project-backup">
